@@ -36,6 +36,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // Form schema for adding a new school
 const addSchoolSchema = z.object({
@@ -107,24 +108,48 @@ const AddSchool: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Step 1: Insert the school information
+      const { data: schoolData, error: schoolError } = await supabase
+        .from('schools')
+        .insert({
+          name: data.name,
+          address: data.address,
+          contact_person: data.contactPerson,
+          email: data.email,
+          phone: data.phone
+        })
+        .select()
+        .single();
       
-      // In a real app, you'd save the school to Supabase here
-      console.log("School data to be saved:", data);
+      if (schoolError) throw schoolError;
       
+      // Step 2: Create billing information
+      const schoolId = schoolData.id;
+      const { error: billingError } = await supabase
+        .from('billing_info')
+        .insert({
+          school_id: schoolId,
+          quoted_price: data.pricePerStudent,
+          advance_paid: data.advancePaid,
+          advance_paid_date: new Date().toISOString().split('T')[0],
+          total_installments: 12 // Default to monthly installments for a year
+        });
+        
+      if (billingError) throw billingError;
+      
+      // Success notification
       toast({
         title: "School Added Successfully",
         description: `${data.name} has been added to the system.`,
       });
       
       navigate("/dashboard");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding school:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to add school. Please try again.",
+        description: error.message || "Failed to add school. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -190,11 +215,14 @@ const AddSchool: React.FC = () => {
                     <FormItem>
                       <FormLabel>Contact Person</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="Name of contact" 
-                          {...field} 
-                          icon={<User className="h-4 w-4" />}
-                        />
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                            placeholder="Name of contact" 
+                            className="pl-8"
+                            {...field} 
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -208,11 +236,15 @@ const AddSchool: React.FC = () => {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="Email address" 
-                          type="email" 
-                          {...field} 
-                        />
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                            placeholder="Email address" 
+                            type="email"
+                            className="pl-8" 
+                            {...field} 
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -226,10 +258,14 @@ const AddSchool: React.FC = () => {
                     <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="School phone" 
-                          {...field} 
-                        />
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                            placeholder="School phone"
+                            className="pl-8" 
+                            {...field} 
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -259,11 +295,15 @@ const AddSchool: React.FC = () => {
                     <FormItem>
                       <FormLabel>Number of Students</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="0" 
-                          {...field} 
-                        />
+                        <div className="relative">
+                          <Users className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                            type="number" 
+                            className="pl-8"
+                            placeholder="0" 
+                            {...field} 
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -278,7 +318,7 @@ const AddSchool: React.FC = () => {
                       <FormLabel>Price Per Student (Yearly)</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
+                          <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                           <Input 
                             type="number" 
                             className="pl-8" 
@@ -300,7 +340,7 @@ const AddSchool: React.FC = () => {
                       <FormLabel>Advance Paid</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
+                          <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                           <Input 
                             type="number" 
                             className="pl-8" 
