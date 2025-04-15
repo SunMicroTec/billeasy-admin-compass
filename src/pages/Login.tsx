@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { supabase } from "@/integrations/supabase/client";
 
 // Login form schema
 const loginSchema = z.object({
@@ -18,10 +19,6 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-// Default credentials (would be replaced with Supabase)
-const ADMIN_EMAIL = "admin@sunmicrotec.com";
-const ADMIN_PASSWORD = "admin123"; // This would be replaced with actual auth
-
 interface LoginProps {
   onLogin: () => void;
 }
@@ -29,6 +26,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingAdminUser, setIsCreatingAdminUser] = useState(false);
   const { toast } = useToast();
   
   const form = useForm<LoginFormValues>({
@@ -39,6 +37,54 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     },
   });
 
+  // Check if admin user exists on component mount
+  useEffect(() => {
+    const checkAndCreateAdminUser = async () => {
+      try {
+        // First, check if the user exists by trying to sign in
+        // This is a bit of a hack, but it's the easiest way to check
+        const { error } = await supabase.auth.signInWithPassword({
+          email: "sunmicrotec@gmail.com",
+          password: "kishan12",
+        });
+        
+        // If there's an error saying the user doesn't exist, create it
+        if (error && error.message.includes("Invalid login credentials")) {
+          setIsCreatingAdminUser(true);
+          
+          // Create the admin user
+          const { error: signUpError } = await supabase.auth.signUp({
+            email: "sunmicrotec@gmail.com",
+            password: "kishan12",
+          });
+          
+          if (signUpError) {
+            console.error("Failed to create admin user:", signUpError);
+            toast({
+              variant: "destructive",
+              title: "Admin user creation failed",
+              description: signUpError.message,
+            });
+          } else {
+            toast({
+              title: "Admin user created",
+              description: "Admin user has been created successfully.",
+            });
+          }
+        }
+        
+        // Sign out after checking/creating
+        await supabase.auth.signOut();
+        setIsCreatingAdminUser(false);
+      } catch (err) {
+        console.error("Error checking/creating admin user:", err);
+        setIsCreatingAdminUser(false);
+      }
+    };
+    
+    checkAndCreateAdminUser();
+  }, [toast]);
+
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
@@ -47,15 +93,30 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Authenticate with Supabase
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
       
-      // Mock authentication (replace with Supabase)
-      if (data.email === ADMIN_EMAIL && data.password === ADMIN_PASSWORD) {
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Login failed",
+          description: error.message,
+        });
+        return;
+      }
+      
+      if (authData && authData.user) {
         // Store user info in localStorage
         localStorage.setItem(
           "billeasy-user",
-          JSON.stringify({ email: data.email, name: "Admin" })
+          JSON.stringify({ 
+            email: authData.user.email, 
+            name: "Admin", 
+            id: authData.user.id 
+          })
         );
         
         // Call the onLogin callback to update auth state
@@ -64,12 +125,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         toast({
           title: "Login successful",
           description: "Welcome to BillEasy Admin!",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Login failed",
-          description: "Invalid email or password. Please try again.",
         });
       }
     } catch (error) {
@@ -98,75 +153,81 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
           
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="admin@sunmicrotec.com" 
-                          {...field} 
-                          autoComplete="email"
-                          disabled={isLoading}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input
-                            type={showPassword ? "text" : "password"}
-                            placeholder="••••••••"
-                            {...field}
-                            autoComplete="current-password"
+            {isCreatingAdminUser ? (
+              <div className="text-center p-4">
+                <p className="text-muted-foreground">Creating admin user...</p>
+              </div>
+            ) : (
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="sunmicrotec@gmail.com" 
+                            {...field} 
+                            autoComplete="email"
                             disabled={isLoading}
                           />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-1 top-1 h-8 w-8"
-                            onClick={togglePasswordVisibility}
-                            tabIndex={-1}
-                          >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              {...field}
+                              autoComplete="current-password"
+                              disabled={isLoading}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-1 top-1 h-8 w-8"
+                              onClick={togglePasswordVisibility}
+                              tabIndex={-1}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <Button
-                  type="submit"
-                  className="w-full bg-billeasy-purple hover:bg-billeasy-dark-purple text-white"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Logging in..." : "Login"}
-                </Button>
-              </form>
-            </Form>
+                  <Button
+                    type="submit"
+                    className="w-full bg-billeasy-purple hover:bg-billeasy-dark-purple text-white"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Logging in..." : "Login"}
+                  </Button>
+                </form>
+              </Form>
+            )}
             
             <div className="mt-4 text-center text-sm text-muted-foreground">
-              <p>Demo credentials: admin@sunmicrotec.com / admin123</p>
+              <p>Admin login: sunmicrotec@gmail.com / kishan12</p>
             </div>
           </div>
         </div>

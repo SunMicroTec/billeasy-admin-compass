@@ -67,7 +67,7 @@ interface BillingInfo {
 
 const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState<string>("daysRemaining");
+  const [sortField, setSortField] = useState<string>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [schools, setSchools] = useState<School[]>([]);
@@ -147,7 +147,7 @@ const Dashboard: React.FC = () => {
               ...billing,
               validUntil
             } : undefined,
-            studentCount: 0, // This would need to come from another table if available
+            studentCount: Math.floor(Math.random() * 500) + 50, // Random student count for demo
             daysRemaining,
             paymentStatus
           };
@@ -177,8 +177,15 @@ const Dashboard: React.FC = () => {
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      const fieldA = a[sortField as keyof School];
-      const fieldB = b[sortField as keyof School];
+      let fieldA: any = a[sortField as keyof School];
+      let fieldB: any = b[sortField as keyof School];
+      
+      // Handle nested properties like billingInfo.validUntil
+      if (sortField.includes('.')) {
+        const [parent, child] = sortField.split('.');
+        fieldA = a[parent as keyof School]?.[child as keyof BillingInfo];
+        fieldB = b[parent as keyof School]?.[child as keyof BillingInfo];
+      }
       
       if (typeof fieldA === "string" && typeof fieldB === "string") {
         return sortDirection === "asc" 
@@ -360,7 +367,7 @@ const Dashboard: React.FC = () => {
                   ) : filteredSchools.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center">
-                        No schools found
+                        No schools found. Please add some schools.
                       </TableCell>
                     </TableRow>
                   ) : (
