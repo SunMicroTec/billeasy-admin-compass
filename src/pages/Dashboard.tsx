@@ -48,8 +48,8 @@ interface School {
   email: string | null;
   phone: string | null;
   created_at: string | null;
+  student_count: number;
   billingInfo?: BillingInfo;
-  studentCount?: number;
   daysRemaining?: number;
   paymentStatus?: string;
 }
@@ -147,9 +147,7 @@ const Dashboard: React.FC = () => {
               ...billing,
               validUntil
             } : undefined,
-            // Set a default student count of 100 for reporting purposes
-            // This should ideally come from another table in a real app
-            studentCount: 100,
+            student_count: school.student_count || 0,
             daysRemaining,
             paymentStatus
           };
@@ -201,7 +199,7 @@ const Dashboard: React.FC = () => {
     });
 
   const totalSchools = schools.length;
-  const totalStudents = schools.reduce((sum, school) => sum + (school.studentCount || 0), 0);
+  const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
   const totalOutstanding = schools
     .filter(s => s.paymentStatus === "overdue" || s.paymentStatus === "critical")
     .reduce((sum, school) => {
@@ -341,8 +339,8 @@ const Dashboard: React.FC = () => {
                       </Button>
                     </TableHead>
                     <TableHead>
-                      <Button variant="ghost" className="-ml-4" onClick={() => toggleSort("studentCount")}>
-                        Students {getSortIcon("studentCount")}
+                      <Button variant="ghost" className="-ml-4" onClick={() => toggleSort("student_count")}>
+                        Students {getSortIcon("student_count")}
                       </Button>
                     </TableHead>
                     <TableHead className="hidden md:table-cell">
@@ -376,7 +374,7 @@ const Dashboard: React.FC = () => {
                     filteredSchools.map((school) => (
                       <TableRow key={school.id}>
                         <TableCell className="font-medium">{school.name}</TableCell>
-                        <TableCell>{school.studentCount || 0}</TableCell>
+                        <TableCell>{school.student_count}</TableCell>
                         <TableCell className="hidden md:table-cell">
                           {school.billingInfo?.validUntil 
                             ? new Date(school.billingInfo.validUntil).toLocaleDateString() 

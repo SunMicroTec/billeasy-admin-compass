@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -39,47 +38,45 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 // Form schema for adding a new school
-const addSchoolSchema = z.object({
+const formSchema = z.object({
   // School details
-  name: z.string().min(3, "School name must be at least 3 characters"),
-  address: z.string().min(5, "Please enter a valid address"),
-  contactPerson: z.string().min(2, "Contact person name is required"),
-  email: z.string().email("Please enter a valid email address"),
-  phone: z.string().min(10, "Phone number must be at least 10 digits"),
-  
-  // Billing details
-  studentCount: z.coerce.number().min(1, "Student count must be at least 1"),
-  pricePerStudent: z.coerce.number().min(1, "Price per student must be at least 1"),
-  advancePaid: z.coerce.number().min(0, "Advance paid must be a positive number"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  address: z.string().optional(),
+  contact_person: z.string().optional(),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  student_count: z.coerce.number().min(0, "Student count must be 0 or greater"),
+  quoted_price: z.coerce.number().min(1, "Price per student must be at least 1"),
+  advance_paid: z.coerce.number().min(0, "Advance paid must be 0 or greater"),
 });
 
-type AddSchoolFormValues = z.infer<typeof addSchoolSchema>;
+type AddSchoolFormValues = z.infer<typeof formSchema>;
 
 const AddSchool: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [calculatedValidity, setCalculatedValidity] = useState<Date | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Initialize form with defaults
   const form = useForm<AddSchoolFormValues>({
-    resolver: zodResolver(addSchoolSchema),
+    resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       address: "",
-      contactPerson: "",
+      contact_person: "",
       email: "",
       phone: "",
-      studentCount: 0,
-      pricePerStudent: 0,
-      advancePaid: 0,
+      student_count: 0,
+      quoted_price: 0,
+      advance_paid: 0,
     },
   });
 
   // Watch form fields for calculating validity
-  const studentCount = form.watch("studentCount");
-  const pricePerStudent = form.watch("pricePerStudent");
-  const advancePaid = form.watch("advancePaid");
+  const studentCount = form.watch("student_count");
+  const pricePerStudent = form.watch("quoted_price");
+  const advancePaid = form.watch("advance_paid");
   
   // Calculate validity whenever relevant fields change
   React.useEffect(() => {
@@ -104,19 +101,20 @@ const AddSchool: React.FC = () => {
     }
   }, [studentCount, pricePerStudent, advancePaid]);
 
-  const onSubmit = async (data: AddSchoolFormValues) => {
-    setIsSubmitting(true);
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsLoading(true);
     
     try {
       // Step 1: Insert the school information
-      const { data: schoolData, error: schoolError } = await supabase
-        .from('schools')
+      const { data: school, error: schoolError } = await supabase
+        .from("schools")
         .insert({
-          name: data.name,
-          address: data.address,
-          contact_person: data.contactPerson,
-          email: data.email,
-          phone: data.phone
+          name: values.name,
+          address: values.address || null,
+          contact_person: values.contact_person || null,
+          email: values.email || null,
+          phone: values.phone || null,
+          student_count: values.student_count || 0,
         })
         .select()
         .single();
@@ -124,25 +122,28 @@ const AddSchool: React.FC = () => {
       if (schoolError) throw schoolError;
       
       // Step 2: Create billing information
-      const schoolId = schoolData.id;
       const { error: billingError } = await supabase
-        .from('billing_info')
+        .from("billing_info")
         .insert({
-          school_id: schoolId,
-          quoted_price: data.pricePerStudent,
-          advance_paid: data.advancePaid,
+          school_id: school.id,
+          quoted_price: values.quoted_price,
+          advance_paid: values.advance_paid,
           advance_paid_date: new Date().toISOString().split('T')[0],
-          total_installments: 12 // Default to monthly installments for a year
+          total_installments: 12,
         });
         
       if (billingError) throw billingError;
       
       // Success notification
       toast({
-        title: "School Added Successfully",
-        description: `${data.name} has been added to the system.`,
+        title: "Success!",
+        description: `${values.name} has been added successfully.`,
       });
       
+      // Reset form
+      form.reset();
+      
+      // Redirect to dashboard
       navigate("/dashboard");
     } catch (error: any) {
       console.error("Error adding school:", error);
@@ -152,7 +153,7 @@ const AddSchool: React.FC = () => {
         description: error.message || "Failed to add school. Please try again.",
       });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
@@ -210,7 +211,7 @@ const AddSchool: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
-                  name="contactPerson"
+                  name="contact_person"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contact Person</FormLabel>
@@ -290,21 +291,16 @@ const AddSchool: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
-                  name="studentCount"
+                  name="student_count"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Number of Students</FormLabel>
                       <FormControl>
-                        <div className="relative">
-                          <Users className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            type="number" 
-                            className="pl-8"
-                            placeholder="0" 
-                            {...field} 
-                          />
-                        </div>
+                        <Input type="number" {...field} />
                       </FormControl>
+                      <FormDescription>
+                        Total student count in the school
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -312,7 +308,7 @@ const AddSchool: React.FC = () => {
                 
                 <FormField
                   control={form.control}
-                  name="pricePerStudent"
+                  name="quoted_price"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Price Per Student (Yearly)</FormLabel>
@@ -334,7 +330,7 @@ const AddSchool: React.FC = () => {
                 
                 <FormField
                   control={form.control}
-                  name="advancePaid"
+                  name="advance_paid"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Advance Paid</FormLabel>
@@ -415,17 +411,17 @@ const AddSchool: React.FC = () => {
               type="button" 
               variant="outline"
               onClick={() => navigate("/dashboard")}
-              disabled={isSubmitting}
+              disabled={isLoading}
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
               className="gap-2 bg-billeasy-purple hover:bg-billeasy-dark-purple"
-              disabled={isSubmitting}
+              disabled={isLoading}
             >
               <PlusCircle className="h-4 w-4" />
-              {isSubmitting ? "Adding School..." : "Add School"}
+              {isLoading ? "Adding School..." : "Add School"}
             </Button>
           </div>
         </form>
