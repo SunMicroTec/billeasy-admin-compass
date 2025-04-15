@@ -1,9 +1,10 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Card, 
   CardContent, 
@@ -60,105 +61,35 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 
-// Mock data for schools
-const mockSchools = [
-  {
-    id: 1,
-    name: "National Public School",
-    address: "456 Education Ave, Mumbai",
-    contactPerson: "Dr. Sharma",
-    email: "principal@nps.edu",
-    phone: "+91 9876543210",
-    studentCount: 1250,
-    pricePerStudent: 350,
-    advancePaid: 200000,
-    validUntil: "2025-05-15",
-    paymentStatus: "paid",
-    daysRemaining: 42,
-    payments: [
-      { 
-        id: 1, 
-        date: "2024-01-15", 
-        amount: 200000, 
-        description: "Initial advance payment", 
-        studentCount: 1250,
-        pricePerStudent: 350
-      }
-    ]
-  },
-  {
-    id: 2,
-    name: "St. Joseph's High School",
-    address: "789 Knowledge Blvd, Delhi",
-    contactPerson: "Fr. Thomas",
-    email: "principal@stjosephs.edu",
-    phone: "+91 9876543211",
-    studentCount: 850,
-    pricePerStudent: 380,
-    advancePaid: 150000,
-    validUntil: "2025-04-30",
-    paymentStatus: "paid",
-    daysRemaining: 27,
-    payments: [
-      { 
-        id: 1, 
-        date: "2024-02-10", 
-        amount: 150000, 
-        description: "Initial advance payment", 
-        studentCount: 850,
-        pricePerStudent: 380
-      }
-    ]
-  },
-  {
-    id: 3,
-    name: "Silver Oaks International",
-    address: "321 Learning Lane, Bangalore",
-    contactPerson: "Ms. Patel",
-    email: "principal@silveroaks.edu",
-    phone: "+91 9876543212",
-    studentCount: 1480,
-    pricePerStudent: 420,
-    advancePaid: 310000,
-    validUntil: "2025-04-12",
-    paymentStatus: "overdue",
-    daysRemaining: 9,
-    payments: [
-      { 
-        id: 1, 
-        date: "2023-12-05", 
-        amount: 310000, 
-        description: "Initial advance payment", 
-        studentCount: 1480,
-        pricePerStudent: 420
-      }
-    ]
-  },
-  {
-    id: 4,
-    name: "Greenfields Academy",
-    address: "654 Wisdom Way, Chennai",
-    contactPerson: "Mr. Kumar",
-    email: "principal@greenfields.edu",
-    phone: "+91 9876543213",
-    studentCount: 720,
-    pricePerStudent: 340,
-    advancePaid: 120000,
-    validUntil: "2025-04-05",
-    paymentStatus: "critical",
-    daysRemaining: 2,
-    payments: [
-      { 
-        id: 1, 
-        date: "2023-11-20", 
-        amount: 120000, 
-        description: "Initial advance payment", 
-        studentCount: 720,
-        pricePerStudent: 340
-      }
-    ]
-  },
-];
+// Define the types for the school and billing data
+interface School {
+  id: string;
+  name: string;
+  address: string | null;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string | null;
+}
+
+interface BillingInfo {
+  id: string;
+  school_id: string;
+  quoted_price: number;
+  total_installments: number;
+  advance_paid: number | null;
+  advance_paid_date: string | null;
+  created_at: string | null;
+}
+
+interface Payment {
+  id: string;
+  amount: number;
+  date: string;
+  description: string;
+  studentCount: number;
+  pricePerStudent: number;
+}
 
 // Schema for payment form
 const paymentFormSchema = z.object({
@@ -175,26 +106,289 @@ const SchoolDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [specialCase, setSpecialCase] = useState(false);
   
-  // Find school by ID
-  const school = mockSchools.find(s => s.id === Number(id));
-
+  const [school, setSchool] = useState<School | null>(null);
+  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [daysRemaining, setDaysRemaining] = useState(0);
+  const [paymentStatus, setPaymentStatus] = useState('critical');
+  const [validUntil, setValidUntil] = useState<string | null>(null);
+  const [studentCount] = useState(100); // Default student count
+  
   // Payment form
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
       amount: 0,
       description: "",
-      studentCount: school?.studentCount || 0,
-      pricePerStudent: school?.pricePerStudent || 0,
+      studentCount: 100, // Default
+      pricePerStudent: 0,
       specialCase: false,
     },
   });
   
-  // If school not found, show error
+  // Fetch school, billing info, and payments
+  useEffect(() => {
+    const fetchSchoolData = async () => {
+      if (!id) return;
+      
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch school
+        const { data: schoolData, error: schoolError } = await supabase
+          .from('schools')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (schoolError) {
+          throw new Error(`Error fetching school: ${schoolError.message}`);
+        }
+        
+        if (!schoolData) {
+          throw new Error('School not found');
+        }
+        
+        setSchool(schoolData);
+        
+        // Fetch billing info
+        const { data: billingData, error: billingError } = await supabase
+          .from('billing_info')
+          .select('*')
+          .eq('school_id', id)
+          .single();
+        
+        if (billingError && billingError.code !== 'PGRST116') { // PGRST116 = not found
+          throw new Error(`Error fetching billing info: ${billingError.message}`);
+        }
+        
+        if (billingData) {
+          setBillingInfo(billingData);
+          
+          // Update form defaults
+          paymentForm.setValue('pricePerStudent', billingData.quoted_price || 0);
+          
+          // Calculate validity
+          if (billingData.advance_paid_date) {
+            const advancePaidDate = new Date(billingData.advance_paid_date);
+            // Assuming validity is for 90 days from advance payment
+            const validityPeriod = 90;
+            const validUntilDate = new Date(advancePaidDate);
+            validUntilDate.setDate(validUntilDate.getDate() + validityPeriod);
+            
+            const today = new Date();
+            const timeDiff = validUntilDate.getTime() - today.getTime();
+            const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            setDaysRemaining(days);
+            setValidUntil(validUntilDate.toISOString());
+            
+            if (days > 30) {
+              setPaymentStatus('paid');
+            } else if (days > 10) {
+              setPaymentStatus('overdue');
+            } else {
+              setPaymentStatus('critical');
+            }
+          }
+          
+          // Fetch payment logs (in a real app, we would have payment_logs table)
+          // For now, we'll use mock data if billing exists
+          setPayments([{
+            id: '1',
+            amount: billingData.advance_paid || 0,
+            date: billingData.advance_paid_date || new Date().toISOString(),
+            description: "Initial advance payment",
+            studentCount: 100,
+            pricePerStudent: billingData.quoted_price || 0
+          }]);
+        } else {
+          // No billing info exists yet
+          setBillingInfo(null);
+          setPayments([]);
+        }
+        
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError(err.message);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: err.message,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchSchoolData();
+  }, [id, toast, paymentForm]);
+  
+  // Handle toggling special case
+  const handleSpecialCaseToggle = () => {
+    setSpecialCase(!specialCase);
+    paymentForm.setValue("specialCase", !specialCase);
+  };
+  
+  // Handle payment submission
+  const onSubmitPayment = async (data: PaymentFormValues) => {
+    if (!school || !id) return;
+    
+    setIsSubmittingPayment(true);
+    
+    try {
+      // If billing info doesn't exist yet, create it
+      let billingId = billingInfo?.id;
+      
+      if (!billingId) {
+        // Create billing info
+        const { data: newBillingData, error: createError } = await supabase
+          .from('billing_info')
+          .insert({
+            school_id: id,
+            quoted_price: data.pricePerStudent,
+            total_installments: 1,
+            advance_paid: data.amount,
+            advance_paid_date: new Date().toISOString().split('T')[0]
+          })
+          .select()
+          .single();
+        
+        if (createError) {
+          throw new Error(`Error creating billing info: ${createError.message}`);
+        }
+        
+        billingId = newBillingData.id;
+        setBillingInfo(newBillingData);
+      } else {
+        // Update existing billing info
+        const { error: updateError } = await supabase
+          .from('billing_info')
+          .update({
+            quoted_price: data.specialCase ? data.pricePerStudent : billingInfo.quoted_price,
+            advance_paid: (billingInfo.advance_paid || 0) + data.amount,
+            advance_paid_date: new Date().toISOString().split('T')[0]
+          })
+          .eq('id', billingId);
+        
+        if (updateError) {
+          throw new Error(`Error updating billing info: ${updateError.message}`);
+        }
+      }
+      
+      // In a real app, we would add to payment_logs table
+      // For now, we'll just update the UI
+      const newPayment = {
+        id: Date.now().toString(),
+        amount: data.amount,
+        date: new Date().toISOString(),
+        description: data.description,
+        studentCount: data.studentCount,
+        pricePerStudent: data.pricePerStudent
+      };
+      
+      setPayments([...payments, newPayment]);
+      
+      toast({
+        title: "Payment Recorded",
+        description: `₹${data.amount.toLocaleString()} has been added to ${school.name}'s account.`,
+      });
+      
+      setIsPaymentDialogOpen(false);
+      
+      // Refresh school data to update validity dates and status
+      const { data: refreshedBilling, error: refreshError } = await supabase
+        .from('billing_info')
+        .select('*')
+        .eq('id', billingId)
+        .single();
+      
+      if (!refreshError && refreshedBilling) {
+        setBillingInfo(refreshedBilling);
+        
+        // Recalculate validity
+        if (refreshedBilling.advance_paid_date) {
+          const advancePaidDate = new Date(refreshedBilling.advance_paid_date);
+          // Assuming validity is for 90 days from advance payment
+          const validityPeriod = 90;
+          const validUntilDate = new Date(advancePaidDate);
+          validUntilDate.setDate(validUntilDate.getDate() + validityPeriod);
+          
+          const today = new Date();
+          const timeDiff = validUntilDate.getTime() - today.getTime();
+          const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+          
+          setDaysRemaining(days);
+          setValidUntil(validUntilDate.toISOString());
+          
+          if (days > 30) {
+            setPaymentStatus('paid');
+          } else if (days > 10) {
+            setPaymentStatus('overdue');
+          } else {
+            setPaymentStatus('critical');
+          }
+        }
+      }
+      
+    } catch (err: any) {
+      console.error("Error processing payment:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err.message || "Failed to record payment. Please try again.",
+      });
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
+  
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isPaymentDialogOpen) {
+      paymentForm.reset({
+        amount: 0,
+        description: "",
+        studentCount: 100, // Default
+        pricePerStudent: billingInfo?.quoted_price || 0,
+        specialCase: false
+      });
+      setSpecialCase(false);
+    }
+  }, [isPaymentDialogOpen, paymentForm, billingInfo]);
+  
+  // If error loading school (not found or other error)
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <h1 className="text-2xl font-bold">Error</h1>
+        <p className="text-muted-foreground">{error}</p>
+        <Button variant="outline" onClick={() => navigate("/dashboard")}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
+  
+  // If loading
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <h1 className="text-2xl font-bold">Loading...</h1>
+        <p className="text-muted-foreground">Fetching school details</p>
+      </div>
+    );
+  }
+  
+  // If school not found
   if (!school) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
@@ -206,47 +400,11 @@ const SchoolDetails: React.FC = () => {
       </div>
     );
   }
-
+  
   // Get payment form values
   const watchedStudentCount = paymentForm.watch("studentCount");
   const watchedPricePerStudent = paymentForm.watch("pricePerStudent");
   const watchedAmount = paymentForm.watch("amount");
-
-  // Handle toggling special case
-  const handleSpecialCaseToggle = () => {
-    setSpecialCase(!specialCase);
-    paymentForm.setValue("specialCase", !specialCase);
-  };
-
-  // Handle payment submission
-  const onSubmitPayment = async (data: PaymentFormValues) => {
-    setIsSubmittingPayment(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // In a real app, you'd save the payment to Supabase here
-      console.log("Payment data to be saved:", data);
-      
-      toast({
-        title: "Payment Recorded",
-        description: `₹${data.amount.toLocaleString()} has been added to ${school.name}'s account.`,
-      });
-      
-      setIsPaymentDialogOpen(false);
-      // In a real app, you'd refresh the school data
-    } catch (error) {
-      console.error("Error adding payment:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to record payment. Please try again.",
-      });
-    } finally {
-      setIsSubmittingPayment(false);
-    }
-  };
 
   // Function to get status class
   const getStatusClass = (status: string) => {
@@ -263,10 +421,12 @@ const SchoolDetails: React.FC = () => {
   };
 
   // Calculate total annual fees
-  const totalAnnualFees = school.studentCount * school.pricePerStudent;
+  const pricePerStudent = billingInfo?.quoted_price || 0;
+  const totalAnnualFees = studentCount * pricePerStudent;
   
   // Calculate remaining balance
-  const remainingBalance = Math.max(0, totalAnnualFees - school.advancePaid);
+  const totalPaid = billingInfo?.advance_paid || 0;
+  const remainingBalance = Math.max(0, totalAnnualFees - totalPaid);
 
   return (
     <div className="space-y-6">
@@ -453,27 +613,29 @@ const SchoolDetails: React.FC = () => {
               <div className="grid gap-1">
                 <div className="flex items-center justify-between py-1">
                   <span className="text-muted-foreground">Status</span>
-                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusClass(school.paymentStatus)}`}>
-                    {school.paymentStatus === "paid" ? "Active" : 
-                     school.paymentStatus === "overdue" ? "Payment Due Soon" : "Critical - About to Expire"}
+                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusClass(paymentStatus)}`}>
+                    {paymentStatus === "paid" ? "Active" : 
+                     paymentStatus === "overdue" ? "Payment Due Soon" : "Critical - About to Expire"}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between py-1">
                   <span className="text-muted-foreground">Valid Until</span>
-                  <span className="font-medium">{new Date(school.validUntil).toLocaleDateString()}</span>
+                  <span className="font-medium">
+                    {validUntil ? new Date(validUntil).toLocaleDateString() : 'Not set'}
+                  </span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between py-1">
                   <span className="text-muted-foreground">Days Remaining</span>
                   <span className={`font-medium ${
-                    school.daysRemaining < 10 
+                    daysRemaining < 10 
                       ? 'text-red-600 dark:text-red-400' 
-                      : school.daysRemaining < 30 
+                      : daysRemaining < 30 
                         ? 'text-orange-600 dark:text-orange-400' 
                         : ''
                   }`}>
-                    {school.daysRemaining} days
+                    {daysRemaining} days
                   </span>
                 </div>
               </div>
@@ -494,7 +656,7 @@ const SchoolDetails: React.FC = () => {
                   <div className="grid grid-cols-[20px_1fr] gap-2">
                     <User className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{school.contactPerson}</p>
+                      <p className="font-medium">{school.contact_person || 'Not specified'}</p>
                       <p className="text-sm text-muted-foreground">Contact Person</p>
                     </div>
                   </div>
@@ -502,7 +664,7 @@ const SchoolDetails: React.FC = () => {
                   <div className="grid grid-cols-[20px_1fr] gap-2">
                     <Mail className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{school.email}</p>
+                      <p className="font-medium">{school.email || 'Not specified'}</p>
                       <p className="text-sm text-muted-foreground">Email Address</p>
                     </div>
                   </div>
@@ -510,7 +672,7 @@ const SchoolDetails: React.FC = () => {
                   <div className="grid grid-cols-[20px_1fr] gap-2">
                     <Phone className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{school.phone}</p>
+                      <p className="font-medium">{school.phone || 'Not specified'}</p>
                       <p className="text-sm text-muted-foreground">Phone Number</p>
                     </div>
                   </div>
@@ -518,7 +680,7 @@ const SchoolDetails: React.FC = () => {
                   <div className="grid grid-cols-[20px_1fr] gap-2">
                     <Users className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{school.studentCount} students</p>
+                      <p className="font-medium">{studentCount} students</p>
                       <p className="text-sm text-muted-foreground">Current Student Count</p>
                     </div>
                   </div>
@@ -538,7 +700,9 @@ const SchoolDetails: React.FC = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Price Per Student</span>
-                    <span className="font-medium">₹{school.pricePerStudent.toLocaleString()}/year</span>
+                    <span className="font-medium">
+                      ₹{pricePerStudent.toLocaleString()}/year
+                    </span>
                   </div>
                   
                   <Separator />
@@ -550,12 +714,16 @@ const SchoolDetails: React.FC = () => {
                   
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Total Paid</span>
-                    <span className="font-medium text-green-600 dark:text-green-400">₹{school.advancePaid.toLocaleString()}</span>
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      ₹{totalPaid.toLocaleString()}
+                    </span>
                   </div>
                   
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Remaining Balance</span>
-                    <span className="font-medium text-red-600 dark:text-red-400">₹{remainingBalance.toLocaleString()}</span>
+                    <span className="font-medium text-red-600 dark:text-red-400">
+                      ₹{remainingBalance.toLocaleString()}
+                    </span>
                   </div>
                 </div>
 
@@ -601,14 +769,14 @@ const SchoolDetails: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {school.payments.length === 0 ? (
+                  {payments.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center">
                         No payment records found
                       </TableCell>
                     </TableRow>
                   ) : (
-                    school.payments.map((payment) => (
+                    payments.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell>
                           {new Date(payment.date).toLocaleDateString()}
@@ -631,10 +799,10 @@ const SchoolDetails: React.FC = () => {
             </CardContent>
             <CardFooter className="flex justify-between border-t px-6 py-4">
               <div className="text-sm text-muted-foreground">
-                Total Payments: {school.payments.length}
+                Total Payments: {payments.length}
               </div>
               <div className="text-sm font-medium">
-                Total Amount: ₹{school.advancePaid.toLocaleString()}
+                Total Amount: ₹{totalPaid.toLocaleString()}
               </div>
             </CardFooter>
           </Card>

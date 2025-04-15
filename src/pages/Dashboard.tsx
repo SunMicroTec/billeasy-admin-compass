@@ -147,7 +147,9 @@ const Dashboard: React.FC = () => {
               ...billing,
               validUntil
             } : undefined,
-            studentCount: Math.floor(Math.random() * 500) + 50, // Random student count for demo
+            // Set a default student count of 100 for reporting purposes
+            // This should ideally come from another table in a real app
+            studentCount: 100,
             daysRemaining,
             paymentStatus
           };
