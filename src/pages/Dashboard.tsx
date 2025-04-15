@@ -1,6 +1,7 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Card, 
   CardContent, 
@@ -36,120 +37,169 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock data for schools
-const mockSchools = [
-  {
-    id: 1,
-    name: "National Public School",
-    address: "456 Education Ave, Mumbai",
-    contact: "Dr. Sharma",
-    studentCount: 1250,
-    pricePerStudent: 350,
-    advancePaid: 200000,
-    validUntil: "2025-05-15",
-    paymentStatus: "paid",
-    daysRemaining: 42,
-  },
-  {
-    id: 2,
-    name: "St. Joseph's High School",
-    address: "789 Knowledge Blvd, Delhi",
-    contact: "Fr. Thomas",
-    studentCount: 850,
-    pricePerStudent: 380,
-    advancePaid: 150000,
-    validUntil: "2025-04-30",
-    paymentStatus: "paid",
-    daysRemaining: 27,
-  },
-  {
-    id: 3,
-    name: "Silver Oaks International",
-    address: "321 Learning Lane, Bangalore",
-    contact: "Ms. Patel",
-    studentCount: 1480,
-    pricePerStudent: 420,
-    advancePaid: 310000,
-    validUntil: "2025-04-12",
-    paymentStatus: "overdue",
-    daysRemaining: 9,
-  },
-  {
-    id: 4,
-    name: "Greenfields Academy",
-    address: "654 Wisdom Way, Chennai",
-    contact: "Mr. Kumar",
-    studentCount: 720,
-    pricePerStudent: 340,
-    advancePaid: 120000,
-    validUntil: "2025-04-05",
-    paymentStatus: "critical",
-    daysRemaining: 2,
-  },
-  {
-    id: 5,
-    name: "New Horizon Public School",
-    address: "987 Bright Street, Hyderabad",
-    contact: "Dr. Reddy",
-    studentCount: 1120,
-    pricePerStudent: 370,
-    advancePaid: 250000,
-    validUntil: "2025-06-30",
-    paymentStatus: "paid",
-    daysRemaining: 88,
-  },
-  {
-    id: 6,
-    name: "Royal Cambridge School",
-    address: "123 Elite Road, Kolkata",
-    contact: "Mrs. Banerjee",
-    studentCount: 650,
-    pricePerStudent: 400,
-    advancePaid: 180000,
-    validUntil: "2025-05-28",
-    paymentStatus: "paid",
-    daysRemaining: 55,
-  },
-];
+// Define the types for the school and billing data
+interface School {
+  id: string;
+  name: string;
+  address: string | null;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string | null;
+  billingInfo?: BillingInfo;
+  studentCount?: number;
+  daysRemaining?: number;
+  paymentStatus?: string;
+}
+
+interface BillingInfo {
+  id: string;
+  school_id: string;
+  quoted_price: number;
+  total_installments: number;
+  advance_paid: number | null;
+  advance_paid_date: string | null;
+  created_at: string | null;
+  validUntil?: string;
+}
 
 const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<string>("daysRemaining");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [schools, setSchools] = useState<School[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
   
   // Get user from localStorage
   const userString = localStorage.getItem("billeasy-user");
   const user = userString ? JSON.parse(userString) : { name: "Admin" };
 
+  // Fetch schools and their billing info from Supabase
+  useEffect(() => {
+    const fetchSchools = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch schools
+        const { data: schoolsData, error: schoolsError } = await supabase
+          .from('schools')
+          .select('*');
+        
+        if (schoolsError) {
+          throw schoolsError;
+        }
+
+        if (!schoolsData || schoolsData.length === 0) {
+          setSchools([]);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch billing info for all schools
+        const { data: billingData, error: billingError } = await supabase
+          .from('billing_info')
+          .select('*')
+          .in('school_id', schoolsData.map(school => school.id));
+        
+        if (billingError) {
+          throw billingError;
+        }
+
+        // Map billing info to schools
+        const enrichedSchools = schoolsData.map(school => {
+          const billing = billingData?.find(b => b.school_id === school.id);
+          
+          // Calculate days remaining and payment status
+          const today = new Date();
+          const advancePaidDate = billing?.advance_paid_date ? new Date(billing.advance_paid_date) : null;
+          
+          // Default values if no billing info exists
+          let daysRemaining = 0;
+          let paymentStatus = 'critical';
+          let validUntil = '';
+          
+          if (advancePaidDate) {
+            // Assuming validity is for 90 days from advance payment
+            const validityPeriod = 90;
+            const validUntilDate = new Date(advancePaidDate);
+            validUntilDate.setDate(validUntilDate.getDate() + validityPeriod);
+            validUntil = validUntilDate.toISOString();
+            
+            const timeDiff = validUntilDate.getTime() - today.getTime();
+            daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            if (daysRemaining > 30) {
+              paymentStatus = 'paid';
+            } else if (daysRemaining > 10) {
+              paymentStatus = 'overdue';
+            } else {
+              paymentStatus = 'critical';
+            }
+          }
+          
+          return {
+            ...school,
+            billingInfo: billing ? {
+              ...billing,
+              validUntil
+            } : undefined,
+            studentCount: 0, // This would need to come from another table if available
+            daysRemaining,
+            paymentStatus
+          };
+        });
+
+        setSchools(enrichedSchools);
+      } catch (error) {
+        console.error('Error fetching schools:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load schools. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSchools();
+  }, [toast]);
+
   // Filter and sort schools
-  const filteredSchools = mockSchools
+  const filteredSchools = schools
     .filter((school) => {
       const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === "all" || school.paymentStatus === statusFilter;
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      const fieldA = a[sortField as keyof typeof a];
-      const fieldB = b[sortField as keyof typeof b];
+      const fieldA = a[sortField as keyof School];
+      const fieldB = b[sortField as keyof School];
       
       if (typeof fieldA === "string" && typeof fieldB === "string") {
         return sortDirection === "asc" 
           ? fieldA.localeCompare(fieldB) 
           : fieldB.localeCompare(fieldA);
       } else {
-        const numA = Number(fieldA);
-        const numB = Number(fieldB);
+        const numA = Number(fieldA) || 0;
+        const numB = Number(fieldB) || 0;
         return sortDirection === "asc" ? numA - numB : numB - numA;
       }
     });
 
-  const totalSchools = mockSchools.length;
-  const totalStudents = mockSchools.reduce((sum, school) => sum + school.studentCount, 0);
-  const totalOutstanding = mockSchools
+  const totalSchools = schools.length;
+  const totalStudents = schools.reduce((sum, school) => sum + (school.studentCount || 0), 0);
+  const totalOutstanding = schools
     .filter(s => s.paymentStatus === "overdue" || s.paymentStatus === "critical")
-    .reduce((sum, school) => sum + (school.studentCount * school.pricePerStudent - school.advancePaid), 0);
+    .reduce((sum, school) => {
+      const billingInfo = school.billingInfo;
+      if (!billingInfo) return sum;
+      return sum + (billingInfo.quoted_price - (billingInfo.advance_paid || 0));
+    }, 0);
 
   // Handle sort toggle
   const toggleSort = (field: string) => {
@@ -215,7 +265,7 @@ const Dashboard: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">₹{totalOutstanding.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {mockSchools.filter(s => s.paymentStatus !== "paid").length} schools with pending payments
+              {schools.filter(s => s.paymentStatus !== "paid").length} schools with pending payments
             </p>
           </CardContent>
         </Card>
@@ -226,7 +276,7 @@ const Dashboard: React.FC = () => {
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockSchools.filter(s => s.daysRemaining < 30).length}</div>
+            <div className="text-2xl font-bold">{schools.filter(s => s.daysRemaining && s.daysRemaining < 30).length}</div>
             <p className="text-xs text-muted-foreground">
               Schools expiring within 30 days
             </p>
@@ -287,8 +337,8 @@ const Dashboard: React.FC = () => {
                       </Button>
                     </TableHead>
                     <TableHead className="hidden md:table-cell">
-                      <Button variant="ghost" className="-ml-4" onClick={() => toggleSort("validUntil")}>
-                        Valid Until {getSortIcon("validUntil")}
+                      <Button variant="ghost" className="-ml-4" onClick={() => toggleSort("billingInfo.validUntil")}>
+                        Valid Until {getSortIcon("billingInfo.validUntil")}
                       </Button>
                     </TableHead>
                     <TableHead>
@@ -301,7 +351,13 @@ const Dashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSchools.length === 0 ? (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center">
+                        Loading schools...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredSchools.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center">
                         No schools found
@@ -311,15 +367,25 @@ const Dashboard: React.FC = () => {
                     filteredSchools.map((school) => (
                       <TableRow key={school.id}>
                         <TableCell className="font-medium">{school.name}</TableCell>
-                        <TableCell>{school.studentCount}</TableCell>
-                        <TableCell className="hidden md:table-cell">{new Date(school.validUntil).toLocaleDateString()}</TableCell>
+                        <TableCell>{school.studentCount || 0}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {school.billingInfo?.validUntil 
+                            ? new Date(school.billingInfo.validUntil).toLocaleDateString() 
+                            : 'Not set'}
+                        </TableCell>
                         <TableCell>
-                          <div className={`font-medium ${school.daysRemaining < 10 ? 'text-red-600 dark:text-red-400' : school.daysRemaining < 30 ? 'text-orange-600 dark:text-orange-400' : ''}`}>
-                            {school.daysRemaining}
+                          <div className={`font-medium ${
+                            school.daysRemaining && school.daysRemaining < 10 
+                              ? 'text-red-600 dark:text-red-400' 
+                              : school.daysRemaining && school.daysRemaining < 30 
+                                ? 'text-orange-600 dark:text-orange-400' 
+                                : ''
+                          }`}>
+                            {school.daysRemaining || 0}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusClass(school.paymentStatus)}`}>
+                          <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusClass(school.paymentStatus || 'critical')}`}>
                             {school.paymentStatus === "paid" ? "Paid" : 
                              school.paymentStatus === "overdue" ? "Overdue" : "Critical"}
                           </span>
