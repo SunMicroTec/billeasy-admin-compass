@@ -12,8 +12,12 @@ interface School {
 
 interface BillingInfo {
   id: string;
+  school_id: string;
   quoted_price: number;
+  total_installments: number;
   advance_paid: number | null;
+  advance_paid_date: string | null;
+  created_at: string | null;
 }
 
 interface Payment {

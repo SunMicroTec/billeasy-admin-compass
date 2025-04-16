@@ -45,12 +45,12 @@ const SchoolDetails: React.FC = () => {
     processPayment
   } = usePaymentProcessing(school, billingInfo, payments);
   
-  // State management
-  const [localBillingInfo, setLocalBillingInfo] = useState(billingInfo);
-  const [localPayments, setLocalPayments] = useState(payments);
-  const [localDaysRemaining, setLocalDaysRemaining] = useState(daysRemaining);
-  const [localPaymentStatus, setLocalPaymentStatus] = useState(paymentStatus);
-  const [localValidUntil, setLocalValidUntil] = useState(validUntil);
+  // State management - using setState functions properly
+  const [localPayments, setLocalPayments] = useState<typeof payments>([]);
+  const [localDaysRemaining, setLocalDaysRemaining] = useState<number>(0);
+  const [localPaymentStatus, setLocalPaymentStatus] = useState<string>('critical');
+  const [localValidUntil, setLocalValidUntil] = useState<string | null>(null);
+  const [localBillingInfo, setLocalBillingInfo] = useState<typeof billingInfo>(null);
   
   // Update local state when props change
   React.useEffect(() => {
