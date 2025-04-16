@@ -415,8 +415,8 @@ const SchoolDetails: React.FC = () => {
   
   const effectiveAmount = Math.max(0, watchedAmount - (specialCase ? excessCharge : 0));
 
-  const totalAnnualFees = watchedStudentCount * watchedPricePerStudent;
-  const pricePerDay = totalAnnualFees / 365;
+  const dialogTotalAnnualFees = watchedStudentCount * watchedPricePerStudent;
+  const pricePerDay = dialogTotalAnnualFees / 365;
   const validityExtension = pricePerDay > 0 ? Math.round(effectiveAmount / pricePerDay) : 0;
 
   const getStatusClass = (status: string) => {
