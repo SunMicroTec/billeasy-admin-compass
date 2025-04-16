@@ -177,16 +177,22 @@ const SchoolDetails: React.FC = () => {
             const advancePaidDate = new Date(billingData.advance_paid_date);
             
             const totalAnnualFees = (schoolData.student_count || 0) * billingData.quoted_price;
+            console.log('Validity calculation - Total annual fees:', totalAnnualFees);
+            
             const pricePerDay = totalAnnualFees / 365;
+            console.log('Validity calculation - Price per day:', pricePerDay);
             
             const daysOfValidity = pricePerDay > 0 ? Math.floor((billingData.advance_paid || 0) / pricePerDay) : 0;
+            console.log('Validity calculation - Days of validity:', daysOfValidity);
             
             const validUntilDate = new Date(advancePaidDate);
             validUntilDate.setDate(validUntilDate.getDate() + daysOfValidity);
+            console.log('Validity calculation - Valid until:', validUntilDate.toISOString());
             
             const today = new Date();
             const timeDiff = validUntilDate.getTime() - today.getTime();
             const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            console.log('Validity calculation - Days remaining:', days);
             
             setDaysRemaining(days);
             setValidUntil(validUntilDate.toISOString());
@@ -244,8 +250,14 @@ const SchoolDetails: React.FC = () => {
       
       if (data.specialCase && data.excessStudentCount && data.excessDays) {
         const pricePerStudentPerDay = data.pricePerStudent / 365;
+        console.log('Special case - Price per student per day:', pricePerStudentPerDay);
+        
         const excessCharge = data.excessStudentCount * pricePerStudentPerDay * data.excessDays;
+        console.log('Special case - Excess students charge:', excessCharge);
+        console.log('Special case - Original amount:', data.amount);
+        
         effectiveAmount = Math.max(0, data.amount - excessCharge);
+        console.log('Special case - Effective amount after deduction:', effectiveAmount);
         
         toast({
           title: "Payment Adjusted",
@@ -320,16 +332,22 @@ const SchoolDetails: React.FC = () => {
           const advancePaidDate = new Date(refreshedBilling.advance_paid_date);
           
           const totalAnnualFees = (school.student_count || 0) * refreshedBilling.quoted_price;
+          console.log('Update validity - Total annual fees:', totalAnnualFees);
+          
           const pricePerDay = totalAnnualFees / 365;
+          console.log('Update validity - Price per day:', pricePerDay);
           
           const daysOfValidity = pricePerDay > 0 ? Math.floor((refreshedBilling.advance_paid || 0) / pricePerDay) : 0;
+          console.log('Update validity - Days of validity:', daysOfValidity);
           
           const validUntilDate = new Date(advancePaidDate);
           validUntilDate.setDate(validUntilDate.getDate() + daysOfValidity);
+          console.log('Update validity - Valid until:', validUntilDate.toISOString());
           
           const today = new Date();
           const timeDiff = validUntilDate.getTime() - today.getTime();
           const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+          console.log('Update validity - Days remaining:', days);
           
           setDaysRemaining(days);
           setValidUntil(validUntilDate.toISOString());
@@ -462,7 +480,7 @@ const SchoolDetails: React.FC = () => {
                   <Plus className="h-4 w-4" /> Add Payment
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Record New Payment</DialogTitle>
                   <DialogDescription>
@@ -629,7 +647,7 @@ const SchoolDetails: React.FC = () => {
                       </Card>
                     )}
 
-                    <DialogFooter>
+                    <DialogFooter className="sticky bottom-0 pt-2 bg-background">
                       <Button type="button" variant="outline" onClick={() => setIsPaymentDialogOpen(false)} disabled={isSubmittingPayment}>
                         Cancel
                       </Button>
