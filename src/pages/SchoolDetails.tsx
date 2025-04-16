@@ -18,10 +18,12 @@ import { PaymentDialog, PaymentFormValues } from "@/components/school-details/Pa
 import { LoadingState } from "@/components/school-details/LoadingState";
 import { ErrorState } from "@/components/school-details/ErrorState";
 import { NotFoundState } from "@/components/school-details/NotFoundState";
+import { useToast } from "@/hooks/use-toast";
 
 const SchoolDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   
@@ -79,6 +81,21 @@ const SchoolDetails: React.FC = () => {
       setLocalPaymentStatus(result.paymentStatus);
       setLocalValidUntil(result.validUntil);
       setIsPaymentDialogOpen(false);
+      
+      // Show success message with option to navigate back to dashboard
+      toast({
+        title: "Payment Processed",
+        description: "Payment has been successfully recorded. The dashboard will reflect the updated validity.",
+        action: (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => navigate('/dashboard')}
+          >
+            View Dashboard
+          </Button>
+        ),
+      });
     }
   };
   

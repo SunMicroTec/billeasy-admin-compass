@@ -1,8 +1,8 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PaymentFormValues } from '@/components/school-details/PaymentDialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface School {
   id: string;
@@ -50,6 +50,7 @@ export const usePaymentProcessing = (
   payments: Payment[]
 ): UsePaymentProcessingReturn => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [specialCase, setSpecialCase] = useState(false);
 
@@ -173,6 +174,9 @@ export const usePaymentProcessing = (
             paymentStatus = 'critical';
           }
         }
+        
+        // Invalidate queries to ensure dashboard gets fresh data
+        queryClient.invalidateQueries({ queryKey: ['schools'] });
         
         return {
           billingInfo: refreshedBilling,

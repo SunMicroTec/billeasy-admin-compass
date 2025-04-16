@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -19,7 +20,8 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowUpDown,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from "lucide-react";
 import {
   Table,
@@ -37,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 // Define the types for the school and billing data
 interface School {
@@ -69,20 +72,17 @@ const Dashboard: React.FC = () => {
   const [sortField, setSortField] = useState<string>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [schools, setSchools] = useState<School[]>([]);
-  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   
   // Get user from localStorage
   const userString = localStorage.getItem("billeasy-user");
   const user = userString ? JSON.parse(userString) : { name: "Admin" };
 
-  // Fetch schools and their billing info from Supabase
-  useEffect(() => {
-    const fetchSchools = async () => {
+  // Fetch schools with React Query
+  const { data: schools = [], isLoading } = useQuery({
+    queryKey: ["schools"],
+    queryFn: async () => {
       try {
-        setLoading(true);
-        
         // Fetch schools
         const { data: schoolsData, error: schoolsError } = await supabase
           .from('schools')
@@ -93,9 +93,7 @@ const Dashboard: React.FC = () => {
         }
 
         if (!schoolsData || schoolsData.length === 0) {
-          setSchools([]);
-          setLoading(false);
-          return;
+          return [];
         }
 
         // Fetch billing info for all schools
@@ -121,15 +119,26 @@ const Dashboard: React.FC = () => {
           let paymentStatus = 'critical';
           let validUntil = '';
           
-          if (advancePaidDate) {
-            // Assuming validity is for 90 days from advance payment
-            const validityPeriod = 90;
+          if (advancePaidDate && billing?.advance_paid) {
+            // Calculate validity based on the amount paid
+            const totalAnnualFees = (school.student_count || 0) * (billing.quoted_price || 0);
+            console.log('Dashboard validity calculation - School:', school.name);
+            console.log('Dashboard validity calculation - Total annual fees:', totalAnnualFees);
+            
+            const pricePerDay = totalAnnualFees / 365;
+            console.log('Dashboard validity calculation - Price per day:', pricePerDay);
+            
+            const daysOfValidity = pricePerDay > 0 ? Math.floor((billing.advance_paid) / pricePerDay) : 0;
+            console.log('Dashboard validity calculation - Days of validity:', daysOfValidity);
+            
             const validUntilDate = new Date(advancePaidDate);
-            validUntilDate.setDate(validUntilDate.getDate() + validityPeriod);
+            validUntilDate.setDate(validUntilDate.getDate() + daysOfValidity);
             validUntil = validUntilDate.toISOString();
+            console.log('Dashboard validity calculation - Valid until:', validUntil);
             
             const timeDiff = validUntilDate.getTime() - today.getTime();
             daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            console.log('Dashboard validity calculation - Days remaining:', daysRemaining);
             
             if (daysRemaining > 30) {
               paymentStatus = 'paid';
@@ -152,21 +161,20 @@ const Dashboard: React.FC = () => {
           };
         });
 
-        setSchools(enrichedSchools);
-      } catch (error) {
+        return enrichedSchools;
+      } catch (error: any) {
         console.error('Error fetching schools:', error);
         toast({
           title: "Error",
           description: "Failed to load schools. Please try again.",
           variant: "destructive"
         });
-      } finally {
-        setLoading(false);
+        return [];
       }
-    };
-
-    fetchSchools();
-  }, [toast]);
+    },
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  });
 
   // Filter and sort schools
   const filteredSchools = schools
@@ -204,7 +212,7 @@ const Dashboard: React.FC = () => {
     .reduce((sum, school) => {
       const billingInfo = school.billingInfo;
       if (!billingInfo) return sum;
-      return sum + (billingInfo.quoted_price - (billingInfo.advance_paid || 0));
+      return sum + ((billingInfo.quoted_price * (school.student_count || 0)) - (billingInfo.advance_paid || 0));
     }, 0);
 
   // Handle sort toggle
@@ -244,7 +252,7 @@ const Dashboard: React.FC = () => {
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">
-          Welcome, Admin <span className="font-medium text-primary">@SunMicroTec</span>
+          Welcome, {user.name} <span className="font-medium text-primary">@SunMicroTec</span>
         </p>
       </div>
 
@@ -357,10 +365,13 @@ const Dashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
+                  {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center">
-                        Loading schools...
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                          Loading schools...
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : filteredSchools.length === 0 ? (
