@@ -68,7 +68,7 @@ interface School {
   email: string | null;
   phone: string | null;
   created_at: string | null;
-  student_count: number;
+  student_count: number | null;
 }
 
 interface BillingInfo {
@@ -96,6 +96,8 @@ const paymentFormSchema = z.object({
   studentCount: z.coerce.number().min(1, "Student count must be at least 1"),
   pricePerStudent: z.coerce.number().min(1, "Price per student must be at least 1"),
   specialCase: z.boolean().optional().default(false),
+  excessStudentCount: z.coerce.number().min(0, "Excess student count must be a non-negative number").optional().default(0),
+  excessDays: z.coerce.number().min(0, "Excess days must be a non-negative number").optional().default(0)
 });
 
 type PaymentFormValues = z.infer<typeof paymentFormSchema>;
@@ -117,16 +119,17 @@ const SchoolDetails: React.FC = () => {
   const [daysRemaining, setDaysRemaining] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('critical');
   const [validUntil, setValidUntil] = useState<string | null>(null);
-  const [studentCount] = useState(100); // Default student count
   
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
       amount: 0,
       description: "",
-      studentCount: 100, // Default
+      studentCount: 0,
       pricePerStudent: 0,
       specialCase: false,
+      excessStudentCount: 0,
+      excessDays: 0
     },
   });
   
@@ -172,9 +175,14 @@ const SchoolDetails: React.FC = () => {
           
           if (billingData.advance_paid_date) {
             const advancePaidDate = new Date(billingData.advance_paid_date);
-            const validityPeriod = 90;
+            
+            const totalAnnualFees = (schoolData.student_count || 0) * billingData.quoted_price;
+            const pricePerDay = totalAnnualFees / 365;
+            
+            const daysOfValidity = pricePerDay > 0 ? Math.floor((billingData.advance_paid || 0) / pricePerDay) : 0;
+            
             const validUntilDate = new Date(advancePaidDate);
-            validUntilDate.setDate(validUntilDate.getDate() + validityPeriod);
+            validUntilDate.setDate(validUntilDate.getDate() + daysOfValidity);
             
             const today = new Date();
             const timeDiff = validUntilDate.getTime() - today.getTime();
@@ -232,6 +240,19 @@ const SchoolDetails: React.FC = () => {
     setIsSubmittingPayment(true);
     
     try {
+      let effectiveAmount = data.amount;
+      
+      if (data.specialCase && data.excessStudentCount && data.excessDays) {
+        const pricePerStudentPerDay = data.pricePerStudent / 365;
+        const excessCharge = data.excessStudentCount * pricePerStudentPerDay * data.excessDays;
+        effectiveAmount = Math.max(0, data.amount - excessCharge);
+        
+        toast({
+          title: "Payment Adjusted",
+          description: `₹${excessCharge.toFixed(2)} was deducted as excess charges for ${data.excessStudentCount} additional students for ${data.excessDays} days.`,
+        });
+      }
+      
       let billingId = billingInfo?.id;
       
       if (!billingId) {
@@ -241,7 +262,7 @@ const SchoolDetails: React.FC = () => {
             school_id: id,
             quoted_price: data.pricePerStudent,
             total_installments: 1,
-            advance_paid: data.amount,
+            advance_paid: effectiveAmount,
             advance_paid_date: new Date().toISOString().split('T')[0]
           })
           .select()
@@ -258,7 +279,7 @@ const SchoolDetails: React.FC = () => {
           .from('billing_info')
           .update({
             quoted_price: data.specialCase ? data.pricePerStudent : billingInfo.quoted_price,
-            advance_paid: (billingInfo.advance_paid || 0) + data.amount,
+            advance_paid: (billingInfo.advance_paid || 0) + effectiveAmount,
             advance_paid_date: new Date().toISOString().split('T')[0]
           })
           .eq('id', billingId);
@@ -272,7 +293,7 @@ const SchoolDetails: React.FC = () => {
         id: Date.now().toString(),
         amount: data.amount,
         date: new Date().toISOString(),
-        description: data.description,
+        description: data.description + (data.specialCase ? ` (Special case: ${data.excessStudentCount} excess students for ${data.excessDays} days)` : ''),
         studentCount: data.studentCount,
         pricePerStudent: data.pricePerStudent
       };
@@ -297,9 +318,14 @@ const SchoolDetails: React.FC = () => {
         
         if (refreshedBilling.advance_paid_date) {
           const advancePaidDate = new Date(refreshedBilling.advance_paid_date);
-          const validityPeriod = 90;
+          
+          const totalAnnualFees = (school.student_count || 0) * refreshedBilling.quoted_price;
+          const pricePerDay = totalAnnualFees / 365;
+          
+          const daysOfValidity = pricePerDay > 0 ? Math.floor((refreshedBilling.advance_paid || 0) / pricePerDay) : 0;
+          
           const validUntilDate = new Date(advancePaidDate);
-          validUntilDate.setDate(validUntilDate.getDate() + validityPeriod);
+          validUntilDate.setDate(validUntilDate.getDate() + daysOfValidity);
           
           const today = new Date();
           const timeDiff = validUntilDate.getTime() - today.getTime();
@@ -335,13 +361,15 @@ const SchoolDetails: React.FC = () => {
       paymentForm.reset({
         amount: 0,
         description: "",
-        studentCount: 100,
+        studentCount: school?.student_count || 0,
         pricePerStudent: billingInfo?.quoted_price || 0,
-        specialCase: false
+        specialCase: false,
+        excessStudentCount: 0,
+        excessDays: 0
       });
       setSpecialCase(false);
     }
-  }, [isPaymentDialogOpen, paymentForm, billingInfo]);
+  }, [isPaymentDialogOpen, paymentForm, billingInfo, school]);
   
   if (error) {
     return (
@@ -379,6 +407,17 @@ const SchoolDetails: React.FC = () => {
   const watchedStudentCount = paymentForm.watch("studentCount");
   const watchedPricePerStudent = paymentForm.watch("pricePerStudent");
   const watchedAmount = paymentForm.watch("amount");
+  const watchedExcessStudentCount = paymentForm.watch("excessStudentCount");
+  const watchedExcessDays = paymentForm.watch("excessDays");
+
+  const pricePerStudentPerDay = watchedPricePerStudent / 365;
+  const excessCharge = watchedExcessStudentCount * pricePerStudentPerDay * watchedExcessDays;
+  
+  const effectiveAmount = Math.max(0, watchedAmount - (specialCase ? excessCharge : 0));
+
+  const totalAnnualFees = watchedStudentCount * watchedPricePerStudent;
+  const pricePerDay = totalAnnualFees / 365;
+  const validityExtension = pricePerDay > 0 ? Math.round(effectiveAmount / pricePerDay) : 0;
 
   const getStatusClass = (status: string) => {
     switch (status) {
@@ -473,7 +512,7 @@ const SchoolDetails: React.FC = () => {
                         className="rounded border-gray-300"
                       />
                       <label htmlFor="specialCase" className="text-sm font-medium">
-                        Special case (student count changed)
+                        Special case (excess students adjustment)
                       </label>
                     </div>
                     
@@ -481,10 +520,44 @@ const SchoolDetails: React.FC = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                         <FormField
                           control={paymentForm.control}
+                          name="excessStudentCount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Excess Student Count</FormLabel>
+                              <FormControl>
+                                <Input type="number" {...field} />
+                              </FormControl>
+                              <FormDescription className="text-xs">
+                                Number of students above regular count
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={paymentForm.control}
+                          name="excessDays"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Excess Days</FormLabel>
+                              <FormControl>
+                                <Input type="number" {...field} />
+                              </FormControl>
+                              <FormDescription className="text-xs">
+                                Days with excess students
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={paymentForm.control}
                           name="studentCount"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Updated Student Count</FormLabel>
+                              <FormLabel>Regular Student Count</FormLabel>
                               <FormControl>
                                 <Input type="number" {...field} />
                               </FormControl>
@@ -519,13 +592,24 @@ const SchoolDetails: React.FC = () => {
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Current Annual Rate:</span>
                               <span>
-                                {watchedStudentCount} students × ₹{watchedPricePerStudent} = ₹{(watchedStudentCount * watchedPricePerStudent).toLocaleString()}
+                                {watchedStudentCount} students × ₹{watchedPricePerStudent} = ₹{(watchedStudentCount * watchedPricePerStudent).toLocaleString()}/year
                               </span>
                             </div>
                             
+                            {specialCase && watchedExcessStudentCount > 0 && watchedExcessDays > 0 && (
+                              <div className="flex justify-between text-amber-600">
+                                <span>Excess Charge Adjustment:</span>
+                                <span>
+                                  {watchedExcessStudentCount} students × {watchedExcessDays} days × ₹{pricePerStudentPerDay.toFixed(2)}/day = -₹{excessCharge.toFixed(2)}
+                                </span>
+                              </div>
+                            )}
+                            
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">This Payment:</span>
-                              <span className="font-medium text-primary">₹{watchedAmount.toLocaleString()}</span>
+                              <span className="text-muted-foreground">Effective Payment:</span>
+                              <span className="font-medium text-primary">
+                                ₹{effectiveAmount.toLocaleString()}
+                              </span>
                             </div>
                             
                             <div className="flex justify-between items-center pt-1">
@@ -534,8 +618,8 @@ const SchoolDetails: React.FC = () => {
                                 Extends Validity By:
                               </span>
                               <span className="font-medium">
-                                {watchedPricePerStudent > 0 ? 
-                                  `~${Math.round((watchedAmount / (watchedStudentCount * watchedPricePerStudent)) * 365)} days` : 
+                                {pricePerDay > 0 ? 
+                                  `~${validityExtension} days` : 
                                   "N/A"
                                 }
                               </span>
