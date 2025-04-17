@@ -34,7 +34,7 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Define the structure of payment_logs table as returned from Supabase
+// Define the structure for payment logs data based on actual DB schema
 interface PaymentLogRecord {
   id: string;
   school_id: string;
@@ -47,20 +47,6 @@ interface PaymentLogRecord {
   student_count: number | null;
   price_per_student: number | null;
   is_special_case: boolean | null;
-}
-
-// Simple type for raw data from Supabase
-interface RawPaymentLogData {
-  id: string;
-  amount: number;
-  payment_date: string;
-  description?: string | null;
-  payment_mode?: string | null;
-  created_at?: string | null;
-  student_count?: number | null;
-  price_per_student?: number | null;
-  is_special_case?: boolean | null;
-  [key: string]: any;
 }
 
 interface UseSchoolDataReturn {
@@ -161,7 +147,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           // Retrieve payment history from payment_logs table in supabase
           const { data: paymentLogsData, error: paymentLogsError } = await supabase
             .from('payment_logs')
-            .select('*')
+            .select('*, billing_id, school_id, description, student_count, price_per_student, is_special_case')
             .eq('school_id', id)
             .order('payment_date', { ascending: false });
             
@@ -172,7 +158,6 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           
           // If we have payment logs, use them
           if (paymentLogsData && paymentLogsData.length > 0) {
-            // Use a simpler approach without complex type mapping
             const mappedPayments: Payment[] = [];
             
             for (const log of paymentLogsData) {
