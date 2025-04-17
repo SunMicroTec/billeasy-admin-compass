@@ -35,6 +35,18 @@ export interface Payment {
   specialCase?: boolean;
 }
 
+// Export return type to enforce consistent shape
+export interface UseSchoolDataReturn {
+  school: School | null;
+  billingInfo: BillingInfo | null;
+  payments: Payment[];
+  loading: boolean;
+  error: string | null;
+  daysRemaining: number;
+  paymentStatus: string;
+  validUntil: string | null;
+}
+
 // Simple type for payment logs from the database
 interface PaymentLogRecord {
   id: string;
@@ -50,18 +62,6 @@ interface PaymentLogRecord {
   installment_id?: string | null;
   school_id?: string | null;
   billing_id?: string | null;
-  [key: string]: any; // Allow additional fields with index signature
-}
-
-export interface UseSchoolDataReturn {
-  school: School | null;
-  billingInfo: BillingInfo | null;
-  payments: Payment[];
-  loading: boolean;
-  error: string | null;
-  daysRemaining: number;
-  paymentStatus: string;
-  validUntil: string | null;
 }
 
 export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
@@ -209,6 +209,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
     fetchSchoolData();
   }, [id, toast]);
 
+  // Explicitly cast the return object to UseSchoolDataReturn type
   return {
     school,
     billingInfo,
@@ -218,5 +219,5 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
     daysRemaining,
     paymentStatus,
     validUntil
-  };
+  } as UseSchoolDataReturn;
 };
