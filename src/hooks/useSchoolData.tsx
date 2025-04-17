@@ -145,9 +145,10 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           }
           
           // Retrieve payment history from payment_logs table in supabase
+          // Only select fields that actually exist in the payment_logs table
           const { data: paymentLogsData, error: paymentLogsError } = await supabase
             .from('payment_logs')
-            .select('*, billing_id, school_id, description, student_count, price_per_student, is_special_case')
+            .select('*')
             .eq('school_id', id)
             .order('payment_date', { ascending: false });
             
@@ -160,14 +161,16 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           if (paymentLogsData && paymentLogsData.length > 0) {
             const mappedPayments: Payment[] = [];
             
-            for (const log of paymentLogsData) {
+            // Using a traditional for loop to avoid TypeScript instantiation depth issues
+            for (let i = 0; i < paymentLogsData.length; i++) {
+              const log = paymentLogsData[i];
               mappedPayments.push({
                 id: log.id,
                 amount: log.amount,
                 date: log.payment_date,
                 description: log.description || "Payment",
-                studentCount: log.student_count || schoolData.student_count || 0,
-                pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
+                studentCount: log.student_count !== null ? log.student_count : schoolData.student_count || 0,
+                pricePerStudent: log.price_per_student !== null ? log.price_per_student : billingData.quoted_price || 0,
                 specialCase: log.is_special_case || false
               });
             }
