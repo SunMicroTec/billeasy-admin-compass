@@ -38,15 +38,15 @@ interface Payment {
 interface PaymentLogRecord {
   id: string;
   school_id: string;
-  billing_id: string | null;
+  billing_id?: string | null;
   amount: number;
   payment_date: string;
-  description: string | null;
-  payment_mode: string | null;
-  created_at: string | null;
-  student_count: number | null;
-  price_per_student: number | null;
-  is_special_case: boolean | null;
+  description?: string | null;
+  payment_mode?: string | null;
+  created_at?: string | null;
+  student_count?: number | null;
+  price_per_student?: number | null;
+  is_special_case?: boolean | null;
 }
 
 interface UseSchoolDataReturn {
@@ -144,13 +144,21 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          // Retrieve payment history from payment_logs table in supabase
-          // Only select fields that actually exist in the payment_logs table
-          const { data: paymentLogsData, error: paymentLogsError } = await supabase
+          // Explicitly type the response to avoid TypeScript errors
+          interface PaymentLogResponse {
+            data: PaymentLogRecord[] | null;
+            error: any;
+          }
+
+          // Explicitly list all columns we need in the select statement
+          const paymentLogsResponse: PaymentLogResponse = await supabase
             .from('payment_logs')
-            .select('*')
+            .select('id, school_id, amount, payment_date, payment_mode, created_at, description, student_count, price_per_student, is_special_case')
             .eq('school_id', id)
             .order('payment_date', { ascending: false });
+            
+          const paymentLogsData = paymentLogsResponse.data;
+          const paymentLogsError = paymentLogsResponse.error;
             
           if (paymentLogsError) {
             console.error("Error fetching payment logs:", paymentLogsError);
@@ -161,7 +169,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           if (paymentLogsData && paymentLogsData.length > 0) {
             const mappedPayments: Payment[] = [];
             
-            // Using a traditional for loop to avoid TypeScript instantiation depth issues
+            // Using a simple for loop instead of forEach or map to avoid TypeScript depth issues
             for (let i = 0; i < paymentLogsData.length; i++) {
               const log = paymentLogsData[i];
               mappedPayments.push({
@@ -169,8 +177,8 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
                 amount: log.amount,
                 date: log.payment_date,
                 description: log.description || "Payment",
-                studentCount: log.student_count !== null ? log.student_count : schoolData.student_count || 0,
-                pricePerStudent: log.price_per_student !== null ? log.price_per_student : billingData.quoted_price || 0,
+                studentCount: log.student_count || schoolData.student_count || 0,
+                pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
                 specialCase: log.is_special_case || false
               });
             }
