@@ -49,19 +49,17 @@ interface PaymentLogRecord {
   is_special_case: boolean | null;
 }
 
-// Define raw payment log data type from Supabase
-type RawPaymentLogData = {
+// Simple type for raw data from Supabase
+interface RawPaymentLogData {
   id: string;
-  school_id: string;
-  billing_id: string | null;
   amount: number;
   payment_date: string;
-  description: string | null;
-  payment_mode: string | null;
-  created_at: string | null;
-  student_count: number | null;
-  price_per_student: number | null;
-  is_special_case: boolean | null;
+  description?: string | null;
+  payment_mode?: string | null;
+  created_at?: string | null;
+  student_count?: number | null;
+  price_per_student?: number | null;
+  is_special_case?: boolean | null;
   [key: string]: any;
 }
 
@@ -174,16 +172,21 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           
           // If we have payment logs, use them
           if (paymentLogsData && paymentLogsData.length > 0) {
-            // Instead of casting, we'll manually map the data
-            const mappedPayments = paymentLogsData.map((log: any) => ({
-              id: log.id,
-              amount: log.amount,
-              date: log.payment_date,
-              description: log.description || "Payment",
-              studentCount: log.student_count || schoolData.student_count || 0,
-              pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
-              specialCase: log.is_special_case || false
-            }));
+            // Use a simpler approach without complex type mapping
+            const mappedPayments: Payment[] = [];
+            
+            for (const log of paymentLogsData) {
+              mappedPayments.push({
+                id: log.id,
+                amount: log.amount,
+                date: log.payment_date,
+                description: log.description || "Payment",
+                studentCount: log.student_count || schoolData.student_count || 0,
+                pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
+                specialCase: log.is_special_case || false
+              });
+            }
+            
             setPayments(mappedPayments);
           } else {
             // If no payment logs found, use the initial payment as fallback
