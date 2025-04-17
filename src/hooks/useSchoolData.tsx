@@ -34,7 +34,7 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Simplified interface for payment logs with all possible fields we need
+// Basic type for payment logs from the database
 interface PaymentLogRecord {
   id: string;
   amount: number;
@@ -97,7 +97,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           throw new Error('School not found');
         }
         
-        setSchool(schoolData);
+        setSchool(schoolData as School);
         
         // Fetch billing info
         const { data: billingData, error: billingError } = await supabase
@@ -111,7 +111,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
         }
         
         if (billingData) {
-          setBillingInfo(billingData);
+          setBillingInfo(billingData as BillingInfo);
           
           if (billingData.advance_paid_date) {
             const advancePaidDate = new Date(billingData.advance_paid_date);
@@ -146,24 +146,28 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          // Simplified payment logs fetching with type assertion to avoid deep instantiation
+          // Simplified payment logs fetching with proper typing
           const fetchPaymentLogs = async () => {
             try {
-              // Get all payment logs as any[] type to avoid specific type checking issues
+              // Get all payment logs
               const { data } = await supabase
                 .from('payment_logs')
                 .select('*');
                 
-              // We need to manually filter by school_id since it may not be in the type
-              // Use type assertion to handle this safely
-              const allData = data as Array<{ school_id?: string } & Record<string, any>>;
-              const filteredData = allData?.filter(item => item.school_id === id) || [];
+              // Cast to array of PaymentLogRecord
+              const allLogs = data as PaymentLogRecord[] || [];
               
-              if (filteredData.length > 0) {
-                const mappedPayments = filteredData.map(log => ({
-                  id: log.id || 'unknown',
-                  amount: log.amount || 0, 
-                  date: log.payment_date || new Date().toISOString(),
+              // Filter logs for this school
+              const schoolLogs = allLogs.filter(log => 
+                // Using optional chaining to safely access possibly undefined property
+                log.school_id === id
+              );
+              
+              if (schoolLogs.length > 0) {
+                const mappedPayments = schoolLogs.map(log => ({
+                  id: log.id,
+                  amount: log.amount, 
+                  date: log.payment_date,
                   description: log.description || "Payment",
                   studentCount: log.student_count || schoolData.student_count || 0,
                   pricePerStudent: log.price_per_student || billingData.quoted_price || 0,

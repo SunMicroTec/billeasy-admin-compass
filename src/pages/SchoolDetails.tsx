@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
@@ -31,26 +30,37 @@ import { NotFoundState } from "@/components/school-details/NotFoundState";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-// Define types for local state to avoid deep type instantiation
+// Define simplified types to avoid complex type inference
+interface BasicSchool {
+  id: string;
+  name: string;
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  student_count: number | null;
+}
+
+interface BasicBillingInfo {
+  id: string;
+  quoted_price: number;
+  advance_paid: number | null;
+  advance_paid_date: string | null;
+}
+
+interface BasicPayment {
+  id: string;
+  amount: number;
+  date: string;
+  description: string;
+  studentCount: number;
+  pricePerStudent: number;
+  specialCase?: boolean;
+}
+
+// Simple interface for local state to avoid deep instantiation
 interface LocalState {
-  payments: Array<{
-    id: string;
-    amount: number;
-    date: string;
-    description: string;
-    studentCount: number;
-    pricePerStudent: number;
-    specialCase?: boolean;
-  }>;
-  billingInfo: {
-    id: string;
-    school_id: string;
-    quoted_price: number;
-    total_installments: number;
-    advance_paid: number | null;
-    advance_paid_date: string | null;
-    created_at: string | null;
-  } | null;
+  payments: BasicPayment[];
+  billingInfo: BasicBillingInfo | null;
   daysRemaining: number;
   paymentStatus: string;
   validUntil: string | null;
@@ -65,20 +75,20 @@ const SchoolDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Fetch school data - TypeScript is having trouble with deep inference here
+  // Get school data with explicit typing to avoid deep type inference
   const schoolDataResult = useSchoolData(id);
   
-  // Unpack the values with explicit typing to avoid deep instantiation
-  const school = schoolDataResult.school;
-  const billingInfo = schoolDataResult.billingInfo;
-  const payments = schoolDataResult.payments;
+  // Destructure with explicit typing
+  const school = schoolDataResult.school as BasicSchool | null;
+  const billingInfo = schoolDataResult.billingInfo as BasicBillingInfo | null;
+  const payments = schoolDataResult.payments as BasicPayment[];
   const loading = schoolDataResult.loading;
   const error = schoolDataResult.error;
   const daysRemaining = schoolDataResult.daysRemaining;
   const paymentStatus = schoolDataResult.paymentStatus;
   const validUntil = schoolDataResult.validUntil;
   
-  // Payment processing logic
+  // Payment processing hook
   const {
     isSubmittingPayment,
     specialCase,
@@ -86,7 +96,7 @@ const SchoolDetails: React.FC = () => {
     processPayment
   } = usePaymentProcessing(school, billingInfo, payments);
   
-  // State management with explicit typing to avoid deep instantiation
+  // Local state with explicit typing
   const [localState, setLocalState] = useState<LocalState>({
     payments: [],
     billingInfo: null,
@@ -95,7 +105,7 @@ const SchoolDetails: React.FC = () => {
     validUntil: null
   });
   
-  // Update local state when props change - use explicit typing
+  // Update local state when props change
   useEffect(() => {
     setLocalState({
       payments: payments,
@@ -115,25 +125,13 @@ const SchoolDetails: React.FC = () => {
   };
   
   const handleSubmitPayment = async (data: PaymentFormValues) => {
+    if (!school) return;
+    
     const result = await processPayment(data);
     
     if (result) {
-      // Type assertion here to avoid deep instantiation issues
-      const typedResult = result as {
-        billingInfo: LocalState['billingInfo'],
-        payments: LocalState['payments'],
-        daysRemaining: number,
-        paymentStatus: string,
-        validUntil: string | null
-      };
-      
-      setLocalState({
-        billingInfo: typedResult.billingInfo,
-        payments: typedResult.payments,
-        daysRemaining: typedResult.daysRemaining,
-        paymentStatus: typedResult.paymentStatus,
-        validUntil: typedResult.validUntil
-      });
+      // Use type assertion to simplify
+      setLocalState(result as LocalState);
       setIsPaymentDialogOpen(false);
       
       // Show success message with option to navigate back to dashboard
@@ -226,7 +224,7 @@ const SchoolDetails: React.FC = () => {
     return <NotFoundState />;
   }
   
-  // Use explicit variables instead of nested property access to avoid deep type inference
+  // Use local variables to avoid deep property access
   const pricePerStudent = localState.billingInfo?.quoted_price || 0;
   const totalAnnualFees = (school?.student_count || 0) * pricePerStudent;
   const totalPaid = localState.billingInfo?.advance_paid || 0;
