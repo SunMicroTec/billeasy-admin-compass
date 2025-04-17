@@ -34,7 +34,7 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Define the structure for payment logs data based on actual DB schema
+// Simplified interface - removed complex nested types
 interface PaymentLogRecord {
   id: string;
   amount: number;
@@ -146,40 +146,41 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          try {
-            // Fetch payment logs with explicit type handling
-            const { data, error: fetchError } = await supabase
-              .from('payment_logs')
-              .select('*')
-              .eq('school_id', id)
-              .order('payment_date', { ascending: false });
+          // Simplified payment logs fetching - avoiding type inference issues
+          const fetchPaymentLogs = async () => {
+            try {
+              // Using raw query to avoid TypeScript inference issues
+              const response = await supabase.from('payment_logs').select();
               
-            if (fetchError) {
-              console.error("Error fetching payment logs:", fetchError);
-              // Don't throw here, just continue with what we have
-            }
-            
-            // If we have payment logs, use them
-            if (data && data.length > 0) {
-              const mappedPayments: Payment[] = [];
+              // Manual filter to avoid deep type instantiation
+              const filteredData = response.data?.filter(item => item.school_id === id) || [];
               
-              // Using a simple for loop to avoid TypeScript depth issues
-              for (let i = 0; i < data.length; i++) {
-                const log = data[i] as any; // Use any to bypass TypeScript errors temporarily
-                mappedPayments.push({
-                  id: log.id || `temp-${i}`,
-                  amount: log.amount || 0,
+              if (filteredData.length > 0) {
+                const mappedPayments = filteredData.map((log: any) => ({
+                  id: log.id || 'unknown',
+                  amount: log.amount || 0, 
                   date: log.payment_date || new Date().toISOString(),
                   description: log.description || "Payment",
                   studentCount: log.student_count || schoolData.student_count || 0,
                   pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
                   specialCase: log.is_special_case || false
-                });
+                }));
+                
+                setPayments(mappedPayments);
+              } else {
+                // Fallback if no payment logs found
+                setPayments([{
+                  id: '1',
+                  amount: billingData.advance_paid || 0,
+                  date: billingData.advance_paid_date || new Date().toISOString(),
+                  description: "Initial advance payment",
+                  studentCount: schoolData.student_count || 0,
+                  pricePerStudent: billingData.quoted_price || 0
+                }]);
               }
-              
-              setPayments(mappedPayments);
-            } else {
-              // If no payment logs found, use the initial payment as fallback
+            } catch (err) {
+              console.error("Error fetching payment logs:", err);
+              // Fallback to initial payment
               setPayments([{
                 id: '1',
                 amount: billingData.advance_paid || 0,
@@ -189,18 +190,9 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
                 pricePerStudent: billingData.quoted_price || 0
               }]);
             }
-          } catch (paymentErr) {
-            console.error("Error processing payment logs:", paymentErr);
-            // Use fallback payment data
-            setPayments([{
-              id: '1',
-              amount: billingData.advance_paid || 0,
-              date: billingData.advance_paid_date || new Date().toISOString(),
-              description: "Initial advance payment",
-              studentCount: schoolData.student_count || 0,
-              pricePerStudent: billingData.quoted_price || 0
-            }]);
-          }
+          };
+          
+          await fetchPaymentLogs();
         } else {
           setBillingInfo(null);
           setPayments([]);
