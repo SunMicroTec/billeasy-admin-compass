@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, History, ReceiptText } from "lucide-react";
@@ -87,10 +86,17 @@ const ActivityLogs = () => {
         if (paymentsError) throw paymentsError;
         
         if (paymentsData) {
-          const formattedPaymentLogs = paymentsData.map(log => ({
-            ...log,
-            school_name: log.school_id ? schoolMap.get(log.school_id) : null
-          }));
+          const formattedPaymentLogs = paymentsData.map(log => {
+            // Make sure all required fields are present
+            return {
+              ...log,
+              school_name: log.school_id ? schoolMap.get(log.school_id) : null,
+              description: log.description || "Payment",
+              student_count: log.student_count || 0,
+              price_per_student: log.price_per_student || 0,
+              is_special_case: log.is_special_case || false
+            } as PaymentLog;
+          });
           
           setPaymentLogs(formattedPaymentLogs);
         }

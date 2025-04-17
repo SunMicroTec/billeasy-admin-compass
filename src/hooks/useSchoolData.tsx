@@ -34,6 +34,21 @@ interface Payment {
   specialCase?: boolean;
 }
 
+// Define the structure of payment_logs table as returned from Supabase
+interface PaymentLogRecord {
+  id: string;
+  school_id: string;
+  billing_id: string | null;
+  amount: number;
+  payment_date: string;
+  description: string | null;
+  payment_mode: string | null;
+  created_at: string | null;
+  student_count: number | null;
+  price_per_student: number | null;
+  is_special_case: boolean | null;
+}
+
 interface UseSchoolDataReturn {
   school: School | null;
   billingInfo: BillingInfo | null;
@@ -141,7 +156,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           
           // If we have payment logs, use them
           if (paymentLogsData && paymentLogsData.length > 0) {
-            const mappedPayments = paymentLogsData.map(log => ({
+            const mappedPayments = paymentLogsData.map((log: PaymentLogRecord) => ({
               id: log.id,
               amount: log.amount,
               date: log.payment_date,
