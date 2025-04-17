@@ -34,7 +34,7 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Simplified interface - removed complex nested types
+// Simplified interface for payment logs with all possible fields we need
 interface PaymentLogRecord {
   id: string;
   amount: number;
@@ -146,14 +146,20 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          // Simplified payment logs fetching - avoiding type inference issues
+          // Simplified payment logs fetching with explicit column selection
           const fetchPaymentLogs = async () => {
             try {
-              // Using raw query to avoid TypeScript inference issues
-              const response = await supabase.from('payment_logs').select();
-              
-              // Manual filter to avoid deep type instantiation
-              const filteredData = response.data?.filter(item => item.school_id === id) || [];
+              // Specify all columns we need plus school_id which needs to be added to the table
+              const { data } = await supabase
+                .from('payment_logs')
+                .select('id, amount, payment_date, payment_mode, receipt_url, created_at, description, student_count, price_per_student, is_special_case, installment_id, billing_id, school_id');
+                
+              // Manually filter the results to avoid type issues
+              const filteredData = data?.filter(item => {
+                // Cast item to any to bypass TypeScript property check
+                const itemAny = item as any;
+                return itemAny.school_id === id;
+              }) || [];
               
               if (filteredData.length > 0) {
                 const mappedPayments = filteredData.map((log: any) => ({

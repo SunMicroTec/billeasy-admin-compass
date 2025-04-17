@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,31 @@ import { NotFoundState } from "@/components/school-details/NotFoundState";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+// Define types for local state to avoid deep type instantiation
+interface LocalState {
+  payments: Array<{
+    id: string;
+    amount: number;
+    date: string;
+    description: string;
+    studentCount: number;
+    pricePerStudent: number;
+    specialCase?: boolean;
+  }>;
+  billingInfo: {
+    id: string;
+    school_id: string;
+    quoted_price: number;
+    total_installments: number;
+    advance_paid: number | null;
+    advance_paid_date: string | null;
+    created_at: string | null;
+  } | null;
+  daysRemaining: number;
+  paymentStatus: string;
+  validUntil: string | null;
+}
+
 const SchoolDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -59,20 +84,24 @@ const SchoolDetails: React.FC = () => {
     processPayment
   } = usePaymentProcessing(school, billingInfo, payments);
   
-  // State management - using setState functions properly
-  const [localPayments, setLocalPayments] = useState<typeof payments>([]);
-  const [localDaysRemaining, setLocalDaysRemaining] = useState<number>(0);
-  const [localPaymentStatus, setLocalPaymentStatus] = useState<string>('critical');
-  const [localValidUntil, setLocalValidUntil] = useState<string | null>(null);
-  const [localBillingInfo, setLocalBillingInfo] = useState<typeof billingInfo>(null);
+  // State management using explicit types to avoid deep instantiation
+  const [localState, setLocalState] = useState<LocalState>({
+    payments: [],
+    billingInfo: null,
+    daysRemaining: 0,
+    paymentStatus: 'critical',
+    validUntil: null
+  });
   
   // Update local state when props change
-  React.useEffect(() => {
-    setLocalBillingInfo(billingInfo);
-    setLocalPayments(payments);
-    setLocalDaysRemaining(daysRemaining);
-    setLocalPaymentStatus(paymentStatus);
-    setLocalValidUntil(validUntil);
+  useEffect(() => {
+    setLocalState({
+      payments: payments,
+      billingInfo: billingInfo,
+      daysRemaining: daysRemaining,
+      paymentStatus: paymentStatus,
+      validUntil: validUntil
+    });
   }, [billingInfo, payments, daysRemaining, paymentStatus, validUntil]);
   
   const handleSpecialCaseToggle = () => {
@@ -87,11 +116,13 @@ const SchoolDetails: React.FC = () => {
     const result = await processPayment(data);
     
     if (result) {
-      setLocalBillingInfo(result.billingInfo);
-      setLocalPayments(result.payments);
-      setLocalDaysRemaining(result.daysRemaining);
-      setLocalPaymentStatus(result.paymentStatus);
-      setLocalValidUntil(result.validUntil);
+      setLocalState({
+        billingInfo: result.billingInfo,
+        payments: result.payments,
+        daysRemaining: result.daysRemaining,
+        paymentStatus: result.paymentStatus,
+        validUntil: result.validUntil
+      });
       setIsPaymentDialogOpen(false);
       
       // Show success message with option to navigate back to dashboard
@@ -184,9 +215,9 @@ const SchoolDetails: React.FC = () => {
     return <NotFoundState />;
   }
   
-  const pricePerStudent = localBillingInfo?.quoted_price || 0;
+  const pricePerStudent = localState.billingInfo?.quoted_price || 0;
   const totalAnnualFees = (school?.student_count || 0) * pricePerStudent;
-  const totalPaid = localBillingInfo?.advance_paid || 0;
+  const totalPaid = localState.billingInfo?.advance_paid || 0;
   const remainingBalance = Math.max(0, totalAnnualFees - totalPaid);
 
   return (
@@ -224,7 +255,7 @@ const SchoolDetails: React.FC = () => {
               specialCase={specialCase}
               defaultValues={{
                 studentCount: school.student_count || 0,
-                pricePerStudent: localBillingInfo?.quoted_price || 0
+                pricePerStudent: localState.billingInfo?.quoted_price || 0
               }}
               onOpenChange={setIsPaymentDialogOpen}
               onSubmit={handleSubmitPayment}
@@ -242,9 +273,9 @@ const SchoolDetails: React.FC = () => {
         
         <TabsContent value="overview" className="space-y-4">
           <SubscriptionStatusCard 
-            paymentStatus={localPaymentStatus}
-            validUntil={localValidUntil}
-            daysRemaining={localDaysRemaining}
+            paymentStatus={localState.paymentStatus}
+            validUntil={localState.validUntil}
+            daysRemaining={localState.daysRemaining}
           />
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -267,7 +298,7 @@ const SchoolDetails: React.FC = () => {
         <TabsContent value="payments">
           <PaymentHistoryTable 
             schoolName={school.name}
-            payments={localPayments}
+            payments={localState.payments}
             totalPaid={totalPaid}
             onAddPayment={handleOpenPaymentDialog}
           />
