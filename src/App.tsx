@@ -14,7 +14,17 @@ import NotFound from "./pages/NotFound";
 import Layout from "./components/Layout";
 import { useState, useEffect } from "react";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      retry: 1,
+      staleTime: 5 * 1000, // 5 seconds
+    },
+  },
+});
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);

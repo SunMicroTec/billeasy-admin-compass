@@ -9,6 +9,44 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      action_logs: {
+        Row: {
+          action_type: string
+          created_at: string | null
+          description: string
+          id: string
+          performed_by: string
+          related_record_id: string | null
+          school_id: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string | null
+          description: string
+          id?: string
+          performed_by: string
+          related_record_id?: string | null
+          school_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string | null
+          description?: string
+          id?: string
+          performed_by?: string
+          related_record_id?: string | null
+          school_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_logs_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_info: {
         Row: {
           advance_paid: number | null

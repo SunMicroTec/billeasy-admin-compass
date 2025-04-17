@@ -202,16 +202,19 @@ export const usePaymentProcessing = (
           }
         }
         
-        // Also add an entry to action_logs
-        await supabase
-          .from('action_logs')
-          .insert({
+        // Log the payment action to action_logs
+        try {
+          await supabase.from('action_logs').insert({
             action_type: 'payment_added',
             description: `Added payment of ₹${data.amount.toLocaleString()} to ${school.name}`,
             performed_by: 'user',
             school_id: school.id,
             related_record_id: paymentLogData.id
           });
+        } catch (error) {
+          console.error('Failed to log action:', error);
+          // Don't throw here as it's not critical to the main operation
+        }
         
         // Invalidate queries to ensure dashboard gets fresh data
         queryClient.invalidateQueries({ queryKey: ['schools'] });

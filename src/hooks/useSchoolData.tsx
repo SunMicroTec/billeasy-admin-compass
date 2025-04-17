@@ -31,6 +31,7 @@ interface Payment {
   description: string;
   studentCount: number;
   pricePerStudent: number;
+  specialCase?: boolean;
 }
 
 interface UseSchoolDataReturn {

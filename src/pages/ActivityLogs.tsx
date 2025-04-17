@@ -16,13 +16,14 @@ interface ActionLog {
   performed_by: string;
   created_at: string;
   school_id: string | null;
-  school_name?: string;
+  school_name?: string | null;
+  related_record_id?: string | null;
 }
 
 interface PaymentLog {
   id: string;
   school_id: string;
-  school_name?: string;
+  school_name?: string | null;
   billing_id: string | null;
   amount: number;
   payment_date: string;
@@ -46,41 +47,53 @@ const ActivityLogs = () => {
       try {
         setLoading(true);
         
+        // Fetch schools first to get school names
+        const { data: schoolsData, error: schoolsError } = await supabase
+          .from('schools')
+          .select('id, name');
+        
+        if (schoolsError) throw schoolsError;
+        
+        const schoolMap = new Map();
+        if (schoolsData) {
+          schoolsData.forEach(school => {
+            schoolMap.set(school.id, school.name);
+          });
+        }
+        
         // Fetch action logs
         const { data: actionsData, error: actionsError } = await supabase
           .from('action_logs')
-          .select(`
-            *,
-            schools:school_id (name)
-          `)
+          .select('*')
           .order('created_at', { ascending: false });
         
         if (actionsError) throw actionsError;
         
-        const formattedActionLogs = actionsData.map(log => ({
-          ...log,
-          school_name: log.schools?.name
-        }));
-        
-        setActionLogs(formattedActionLogs);
+        if (actionsData) {
+          const formattedActionLogs = actionsData.map(log => ({
+            ...log,
+            school_name: log.school_id ? schoolMap.get(log.school_id) : null
+          }));
+          
+          setActionLogs(formattedActionLogs);
+        }
         
         // Fetch payment logs
         const { data: paymentsData, error: paymentsError } = await supabase
           .from('payment_logs')
-          .select(`
-            *,
-            schools:school_id (name)
-          `)
+          .select('*')
           .order('payment_date', { ascending: false });
         
         if (paymentsError) throw paymentsError;
         
-        const formattedPaymentLogs = paymentsData.map(log => ({
-          ...log,
-          school_name: log.schools?.name
-        }));
-        
-        setPaymentLogs(formattedPaymentLogs);
+        if (paymentsData) {
+          const formattedPaymentLogs = paymentsData.map(log => ({
+            ...log,
+            school_name: log.school_id ? schoolMap.get(log.school_id) : null
+          }));
+          
+          setPaymentLogs(formattedPaymentLogs);
+        }
       } catch (error: any) {
         console.error("Error fetching logs:", error);
         toast({

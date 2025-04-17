@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
@@ -119,14 +118,17 @@ const SchoolDetails: React.FC = () => {
       setIsDeleting(true);
       
       // Log the delete action
-      await supabase
-        .from('action_logs')
-        .insert({
+      try {
+        await supabase.from('action_logs').insert({
           action_type: 'school_deleted',
           description: `Deleted school: ${school.name}`,
           performed_by: 'user',
           school_id: id
         });
+      } catch (error) {
+        console.error('Failed to log delete action:', error);
+        // Continue with deletion even if logging fails
+      }
         
       // Delete related records first
       if (billingInfo) {
