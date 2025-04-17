@@ -34,7 +34,7 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Basic type for payment logs from the database
+// Simplified type for payment logs from the database
 interface PaymentLogRecord {
   id: string;
   amount: number;
@@ -49,6 +49,8 @@ interface PaymentLogRecord {
   installment_id?: string | null;
   school_id?: string | null;
   billing_id?: string | null;
+  // Additional fields that may be returned by the database
+  [key: string]: any;
 }
 
 interface UseSchoolDataReturn {
@@ -154,13 +156,25 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
                 .from('payment_logs')
                 .select('*');
                 
-              // Cast to array of PaymentLogRecord
-              const allLogs = data as PaymentLogRecord[] || [];
+              if (!data || data.length === 0) {
+                // Fallback if no payment logs found
+                setPayments([{
+                  id: '1',
+                  amount: billingData.advance_paid || 0,
+                  date: billingData.advance_paid_date || new Date().toISOString(),
+                  description: "Initial advance payment",
+                  studentCount: schoolData.student_count || 0,
+                  pricePerStudent: billingData.quoted_price || 0
+                }]);
+                return;
+              }
               
-              // Filter logs for this school
+              // Cast to array of PaymentLogRecord with looser typing using any
+              const allLogs = data as any[];
+              
+              // Filter logs for this school using safe property access
               const schoolLogs = allLogs.filter(log => 
-                // Using optional chaining to safely access possibly undefined property
-                log.school_id === id
+                log && log.school_id === id
               );
               
               if (schoolLogs.length > 0) {
@@ -176,7 +190,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
                 
                 setPayments(mappedPayments);
               } else {
-                // Fallback if no payment logs found
+                // Fallback if no payment logs found for this school
                 setPayments([{
                   id: '1',
                   amount: billingData.advance_paid || 0,

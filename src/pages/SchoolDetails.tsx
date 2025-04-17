@@ -30,24 +30,29 @@ import { NotFoundState } from "@/components/school-details/NotFoundState";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-// Define simplified types to avoid complex type inference
-interface BasicSchool {
+// Define types that match exactly what the hooks expect
+interface School {
   id: string;
   name: string;
   address?: string | null;
+  contact_person?: string | null;
   email?: string | null;
   phone?: string | null;
   student_count: number | null;
+  created_at?: string | null;
 }
 
-interface BasicBillingInfo {
+interface BillingInfo {
   id: string;
+  school_id: string;
   quoted_price: number;
+  total_installments: number;
   advance_paid: number | null;
   advance_paid_date: string | null;
+  created_at: string | null;
 }
 
-interface BasicPayment {
+interface Payment {
   id: string;
   amount: number;
   date: string;
@@ -57,10 +62,10 @@ interface BasicPayment {
   specialCase?: boolean;
 }
 
-// Simple interface for local state to avoid deep instantiation
+// Simple interface for local state
 interface LocalState {
-  payments: BasicPayment[];
-  billingInfo: BasicBillingInfo | null;
+  payments: Payment[];
+  billingInfo: BillingInfo | null;
   daysRemaining: number;
   paymentStatus: string;
   validUntil: string | null;
@@ -75,13 +80,13 @@ const SchoolDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Get school data with explicit typing to avoid deep type inference
+  // Get school data with consistent types
   const schoolDataResult = useSchoolData(id);
   
-  // Destructure with explicit typing
-  const school = schoolDataResult.school as BasicSchool | null;
-  const billingInfo = schoolDataResult.billingInfo as BasicBillingInfo | null;
-  const payments = schoolDataResult.payments as BasicPayment[];
+  // Explicitly cast types to avoid deep instantiation
+  const school = schoolDataResult.school as School;
+  const billingInfo = schoolDataResult.billingInfo as BillingInfo;
+  const payments = schoolDataResult.payments as Payment[];
   const loading = schoolDataResult.loading;
   const error = schoolDataResult.error;
   const daysRemaining = schoolDataResult.daysRemaining;
@@ -96,7 +101,7 @@ const SchoolDetails: React.FC = () => {
     processPayment
   } = usePaymentProcessing(school, billingInfo, payments);
   
-  // Local state with explicit typing
+  // Local state with explicit typing to prevent deep instantiation
   const [localState, setLocalState] = useState<LocalState>({
     payments: [],
     billingInfo: null,
@@ -107,12 +112,13 @@ const SchoolDetails: React.FC = () => {
   
   // Update local state when props change
   useEffect(() => {
+    // Cast to the expected LocalState shape to avoid type recursion
     setLocalState({
-      payments: payments,
-      billingInfo: billingInfo,
-      daysRemaining: daysRemaining,
-      paymentStatus: paymentStatus,
-      validUntil: validUntil
+      payments: payments || [],
+      billingInfo: billingInfo || null,
+      daysRemaining: daysRemaining || 0,
+      paymentStatus: paymentStatus || 'critical',
+      validUntil: validUntil || null
     });
   }, [billingInfo, payments, daysRemaining, paymentStatus, validUntil]);
   
@@ -127,11 +133,18 @@ const SchoolDetails: React.FC = () => {
   const handleSubmitPayment = async (data: PaymentFormValues) => {
     if (!school) return;
     
+    // Cast the result to a more basic type to avoid deep instantiation
     const result = await processPayment(data);
     
     if (result) {
-      // Use type assertion to simplify
-      setLocalState(result as LocalState);
+      // Force type cast to avoid recursion
+      setLocalState({
+        billingInfo: result.billingInfo,
+        payments: result.payments,
+        daysRemaining: result.daysRemaining || 0,
+        paymentStatus: result.paymentStatus || 'critical',
+        validUntil: result.validUntil
+      });
       setIsPaymentDialogOpen(false);
       
       // Show success message with option to navigate back to dashboard
