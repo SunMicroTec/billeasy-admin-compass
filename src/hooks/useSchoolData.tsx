@@ -80,6 +80,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
         setLoading(true);
         setError(null);
         
+        // Fetch school data
         const { data: schoolData, error: schoolError } = await supabase
           .from('schools')
           .select('*')
@@ -96,6 +97,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
         
         setSchool(schoolData);
         
+        // Fetch billing info
         const { data: billingData, error: billingError } = await supabase
           .from('billing_info')
           .select('*')
@@ -156,7 +158,9 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           
           // If we have payment logs, use them
           if (paymentLogsData && paymentLogsData.length > 0) {
-            const mappedPayments = paymentLogsData.map((log: PaymentLogRecord) => ({
+            // Cast the data to ensure TypeScript knows it has the correct shape
+            const typedPaymentLogsData = paymentLogsData as unknown as PaymentLogRecord[];
+            const mappedPayments = typedPaymentLogsData.map((log: PaymentLogRecord) => ({
               id: log.id,
               amount: log.amount,
               date: log.payment_date,
