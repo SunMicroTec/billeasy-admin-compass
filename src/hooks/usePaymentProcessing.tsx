@@ -4,31 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PaymentFormValues } from '@/components/school-details/PaymentDialog';
 import { useQueryClient } from '@tanstack/react-query';
-
-interface School {
-  id: string;
-  name: string;
-  student_count: number | null;
-}
-
-interface BillingInfo {
-  id: string;
-  school_id: string;
-  quoted_price: number;
-  total_installments: number;
-  advance_paid: number | null;
-  advance_paid_date: string | null;
-  created_at: string | null;
-}
-
-interface Payment {
-  id: string;
-  amount: number;
-  date: string;
-  description: string;
-  studentCount: number;
-  pricePerStudent: number;
-}
+import { School, BillingInfo, Payment } from '@/hooks/useSchoolData';
 
 interface UpdatedState {
   billingInfo: BillingInfo | null;
@@ -142,7 +118,7 @@ export const usePaymentProcessing = (
       }
       
       // Map the new payment log to our expected Payment format
-      const newPayment = {
+      const newPayment: Payment = {
         id: paymentLogData.id,
         amount: data.amount,
         date: new Date().toISOString(),

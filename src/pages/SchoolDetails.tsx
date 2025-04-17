@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 // Custom Hooks
-import { useSchoolData } from "@/hooks/useSchoolData";
+import { useSchoolData, School, BillingInfo, Payment } from "@/hooks/useSchoolData";
 import { usePaymentProcessing } from "@/hooks/usePaymentProcessing";
 
 // Components
@@ -31,42 +31,10 @@ import { NotFoundState } from "@/components/school-details/NotFoundState";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-// Simplified flat types to avoid deep instantiation
-interface SimpleSchool {
-  id: string;
-  name: string;
-  address?: string | null;
-  contact_person?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  student_count: number | null;
-  created_at?: string | null;
-}
-
-interface SimpleBillingInfo {
-  id: string;
-  quoted_price: number;
-  total_installments: number;
-  advance_paid: number | null;
-  advance_paid_date: string | null;
-  school_id: string;
-  created_at: string | null;
-}
-
-interface SimplePayment {
-  id: string;
-  amount: number;
-  date: string;
-  description: string;
-  studentCount: number;
-  pricePerStudent: number;
-  specialCase?: boolean;
-}
-
 // Simple interface for local state to avoid recursive type definitions
 interface LocalState {
-  payments: SimplePayment[];
-  billingInfo: SimpleBillingInfo | null;
+  payments: Payment[];
+  billingInfo: BillingInfo | null;
   daysRemaining: number;
   paymentStatus: string;
   validUntil: string | null;
@@ -81,29 +49,28 @@ const SchoolDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Get school data
-  const schoolDataResult = useSchoolData(id);
+  // Get school data with explicit types
+  const {
+    school, 
+    billingInfo, 
+    payments, 
+    loading, 
+    error, 
+    daysRemaining,
+    paymentStatus,
+    validUntil
+  } = useSchoolData(id);
   
-  // Use type assertions to break deep instantiation cycles
-  const school = schoolDataResult.school as SimpleSchool;
-  const billingInfo = schoolDataResult.billingInfo as SimpleBillingInfo;
-  const payments = schoolDataResult.payments as SimplePayment[];
-  const loading = schoolDataResult.loading;
-  const error = schoolDataResult.error;
-  const daysRemaining = schoolDataResult.daysRemaining;
-  const paymentStatus = schoolDataResult.paymentStatus;
-  const validUntil = schoolDataResult.validUntil;
-  
-  // Payment processing hook
+  // Payment processing hook with explicit types
   const {
     isSubmittingPayment,
     specialCase,
     setSpecialCase,
     processPayment
   } = usePaymentProcessing(
-    school as any,
-    billingInfo as any,
-    payments as any
+    school,
+    billingInfo,
+    payments
   );
   
   // Local state with explicit typing to prevent deep instantiation
@@ -117,7 +84,6 @@ const SchoolDetails: React.FC = () => {
   
   // Update local state when props change
   useEffect(() => {
-    // Use a literal object assignment to avoid type recursion
     setLocalState({
       payments: payments || [],
       billingInfo: billingInfo || null,
@@ -142,10 +108,9 @@ const SchoolDetails: React.FC = () => {
     const result = await processPayment(data);
     
     if (result) {
-      // Directly use object literals to avoid deep type instantiation
       setLocalState({
-        billingInfo: result.billingInfo as SimpleBillingInfo,
-        payments: result.payments as SimplePayment[],
+        billingInfo: result.billingInfo,
+        payments: result.payments,
         daysRemaining: result.daysRemaining || 0,
         paymentStatus: result.paymentStatus || 'critical',
         validUntil: result.validUntil
