@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
@@ -64,17 +65,18 @@ const SchoolDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Fetch school data
-  const {
-    school,
-    billingInfo,
-    payments,
-    loading,
-    error,
-    daysRemaining,
-    paymentStatus,
-    validUntil
-  } = useSchoolData(id);
+  // Fetch school data - TypeScript is having trouble with deep inference here
+  const schoolDataResult = useSchoolData(id);
+  
+  // Unpack the values with explicit typing to avoid deep instantiation
+  const school = schoolDataResult.school;
+  const billingInfo = schoolDataResult.billingInfo;
+  const payments = schoolDataResult.payments;
+  const loading = schoolDataResult.loading;
+  const error = schoolDataResult.error;
+  const daysRemaining = schoolDataResult.daysRemaining;
+  const paymentStatus = schoolDataResult.paymentStatus;
+  const validUntil = schoolDataResult.validUntil;
   
   // Payment processing logic
   const {
@@ -84,7 +86,7 @@ const SchoolDetails: React.FC = () => {
     processPayment
   } = usePaymentProcessing(school, billingInfo, payments);
   
-  // State management using explicit types to avoid deep instantiation
+  // State management with explicit typing to avoid deep instantiation
   const [localState, setLocalState] = useState<LocalState>({
     payments: [],
     billingInfo: null,
@@ -93,7 +95,7 @@ const SchoolDetails: React.FC = () => {
     validUntil: null
   });
   
-  // Update local state when props change
+  // Update local state when props change - use explicit typing
   useEffect(() => {
     setLocalState({
       payments: payments,
@@ -116,12 +118,21 @@ const SchoolDetails: React.FC = () => {
     const result = await processPayment(data);
     
     if (result) {
+      // Type assertion here to avoid deep instantiation issues
+      const typedResult = result as {
+        billingInfo: LocalState['billingInfo'],
+        payments: LocalState['payments'],
+        daysRemaining: number,
+        paymentStatus: string,
+        validUntil: string | null
+      };
+      
       setLocalState({
-        billingInfo: result.billingInfo,
-        payments: result.payments,
-        daysRemaining: result.daysRemaining,
-        paymentStatus: result.paymentStatus,
-        validUntil: result.validUntil
+        billingInfo: typedResult.billingInfo,
+        payments: typedResult.payments,
+        daysRemaining: typedResult.daysRemaining,
+        paymentStatus: typedResult.paymentStatus,
+        validUntil: typedResult.validUntil
       });
       setIsPaymentDialogOpen(false);
       
@@ -215,6 +226,7 @@ const SchoolDetails: React.FC = () => {
     return <NotFoundState />;
   }
   
+  // Use explicit variables instead of nested property access to avoid deep type inference
   const pricePerStudent = localState.billingInfo?.quoted_price || 0;
   const totalAnnualFees = (school?.student_count || 0) * pricePerStudent;
   const totalPaid = localState.billingInfo?.advance_paid || 0;

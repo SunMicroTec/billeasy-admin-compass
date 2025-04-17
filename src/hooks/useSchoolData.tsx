@@ -146,23 +146,21 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          // Simplified payment logs fetching with explicit column selection
+          // Simplified payment logs fetching with type assertion to avoid deep instantiation
           const fetchPaymentLogs = async () => {
             try {
-              // Specify all columns we need plus school_id which needs to be added to the table
+              // Get all payment logs as any[] type to avoid specific type checking issues
               const { data } = await supabase
                 .from('payment_logs')
-                .select('id, amount, payment_date, payment_mode, receipt_url, created_at, description, student_count, price_per_student, is_special_case, installment_id, billing_id, school_id');
+                .select('*');
                 
-              // Manually filter the results to avoid type issues
-              const filteredData = data?.filter(item => {
-                // Cast item to any to bypass TypeScript property check
-                const itemAny = item as any;
-                return itemAny.school_id === id;
-              }) || [];
+              // We need to manually filter by school_id since it may not be in the type
+              // Use type assertion to handle this safely
+              const allData = data as Array<{ school_id?: string } & Record<string, any>>;
+              const filteredData = allData?.filter(item => item.school_id === id) || [];
               
               if (filteredData.length > 0) {
-                const mappedPayments = filteredData.map((log: any) => ({
+                const mappedPayments = filteredData.map(log => ({
                   id: log.id || 'unknown',
                   amount: log.amount || 0, 
                   date: log.payment_date || new Date().toISOString(),
