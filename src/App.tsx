@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import AddSchool from "./pages/AddSchool";
 import SchoolDetails from "./pages/SchoolDetails";
+import ActivityLogs from "./pages/ActivityLogs";
 import NotFound from "./pages/NotFound";
 import Layout from "./components/Layout";
 import { useState, useEffect } from "react";
@@ -85,6 +86,18 @@ const App = () => {
                   isAuthenticated ? (
                     <Layout onLogout={handleLogout}>
                       <SchoolDetails />
+                    </Layout>
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
+              <Route
+                path="/logs"
+                element={
+                  isAuthenticated ? (
+                    <Layout onLogout={handleLogout}>
+                      <ActivityLogs />
                     </Layout>
                   ) : (
                     <Navigate to="/" />

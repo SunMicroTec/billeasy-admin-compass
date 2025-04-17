@@ -1,9 +1,19 @@
 
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Custom Hooks
 import { useSchoolData } from "@/hooks/useSchoolData";
@@ -19,6 +29,7 @@ import { LoadingState } from "@/components/school-details/LoadingState";
 import { ErrorState } from "@/components/school-details/ErrorState";
 import { NotFoundState } from "@/components/school-details/NotFoundState";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const SchoolDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +37,8 @@ const SchoolDetails: React.FC = () => {
   const { toast } = useToast();
   
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Fetch school data
   const {
@@ -99,6 +112,64 @@ const SchoolDetails: React.FC = () => {
     }
   };
   
+  const handleDeleteSchool = async () => {
+    if (!school || !id) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      // Log the delete action
+      await supabase
+        .from('action_logs')
+        .insert({
+          action_type: 'school_deleted',
+          description: `Deleted school: ${school.name}`,
+          performed_by: 'user',
+          school_id: id
+        });
+        
+      // Delete related records first
+      if (billingInfo) {
+        // Delete payment logs
+        await supabase
+          .from('payment_logs')
+          .delete()
+          .eq('school_id', id);
+        
+        // Delete billing info
+        await supabase
+          .from('billing_info')
+          .delete()
+          .eq('school_id', id);
+      }
+      
+      // Finally delete the school
+      const { error } = await supabase
+        .from('schools')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "School Deleted",
+        description: `${school.name} has been successfully deleted.`,
+      });
+      
+      navigate('/dashboard');
+    } catch (err: any) {
+      console.error("Error deleting school:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err.message || "Failed to delete school. Please try again.",
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+  
   if (error) {
     return <ErrorState message={error} />;
   }
@@ -134,6 +205,16 @@ const SchoolDetails: React.FC = () => {
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3">
+            <Button 
+              variant="destructive"
+              size="sm"
+              className="gap-2"
+              onClick={() => setIsDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete School</span>
+            </Button>
+            
             <PaymentDialog 
               schoolName={school.name}
               isOpen={isPaymentDialogOpen}
@@ -190,6 +271,31 @@ const SchoolDetails: React.FC = () => {
           />
         </TabsContent>
       </Tabs>
+      
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {school.name} and all associated payment records.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteSchool();
+              }}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

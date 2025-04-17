@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -115,11 +116,37 @@ export const usePaymentProcessing = (
         }
       }
       
+      // Create a new payment log in the payment_logs table
+      const paymentDescription = data.description + (data.specialCase ? ` (Special case: ${data.excessStudentCount} excess students for ${data.excessDays} days)` : '');
+      
+      const { data: paymentLogData, error: paymentLogError } = await supabase
+        .from('payment_logs')
+        .insert({
+          school_id: school.id,
+          billing_id: billingId,
+          amount: data.amount,
+          payment_date: new Date().toISOString().split('T')[0],
+          description: paymentDescription,
+          payment_mode: 'manual',
+          student_count: data.studentCount,
+          price_per_student: data.pricePerStudent,
+          is_special_case: data.specialCase || false,
+          excess_student_count: data.excessStudentCount || 0,
+          excess_days: data.excessDays || 0
+        })
+        .select()
+        .single();
+      
+      if (paymentLogError) {
+        throw new Error(`Error logging payment: ${paymentLogError.message}`);
+      }
+      
+      // Map the new payment log to our expected Payment format
       const newPayment = {
-        id: Date.now().toString(),
+        id: paymentLogData.id,
         amount: data.amount,
         date: new Date().toISOString(),
-        description: data.description + (data.specialCase ? ` (Special case: ${data.excessStudentCount} excess students for ${data.excessDays} days)` : ''),
+        description: paymentDescription,
         studentCount: data.studentCount,
         pricePerStudent: data.pricePerStudent
       };
@@ -174,6 +201,17 @@ export const usePaymentProcessing = (
             paymentStatus = 'critical';
           }
         }
+        
+        // Also add an entry to action_logs
+        await supabase
+          .from('action_logs')
+          .insert({
+            action_type: 'payment_added',
+            description: `Added payment of ₹${data.amount.toLocaleString()} to ${school.name}`,
+            performed_by: 'user',
+            school_id: school.id,
+            related_record_id: paymentLogData.id
+          });
         
         // Invalidate queries to ensure dashboard gets fresh data
         queryClient.invalidateQueries({ queryKey: ['schools'] });

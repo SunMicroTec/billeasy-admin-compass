@@ -126,14 +126,41 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          setPayments([{
-            id: '1',
-            amount: billingData.advance_paid || 0,
-            date: billingData.advance_paid_date || new Date().toISOString(),
-            description: "Initial advance payment",
-            studentCount: schoolData.student_count || 0,
-            pricePerStudent: billingData.quoted_price || 0
-          }]);
+          // Retrieve payment history from payment_logs table in supabase
+          const { data: paymentLogsData, error: paymentLogsError } = await supabase
+            .from('payment_logs')
+            .select('*')
+            .eq('school_id', id)
+            .order('payment_date', { ascending: false });
+            
+          if (paymentLogsError) {
+            console.error("Error fetching payment logs:", paymentLogsError);
+            // Don't throw here, just continue with what we have
+          }
+          
+          // If we have payment logs, use them
+          if (paymentLogsData && paymentLogsData.length > 0) {
+            const mappedPayments = paymentLogsData.map(log => ({
+              id: log.id,
+              amount: log.amount,
+              date: log.payment_date,
+              description: log.description || "Payment",
+              studentCount: log.student_count || schoolData.student_count || 0,
+              pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
+              specialCase: log.is_special_case || false
+            }));
+            setPayments(mappedPayments);
+          } else {
+            // If no payment logs found, use the initial payment as fallback
+            setPayments([{
+              id: '1',
+              amount: billingData.advance_paid || 0,
+              date: billingData.advance_paid_date || new Date().toISOString(),
+              description: "Initial advance payment",
+              studentCount: schoolData.student_count || 0,
+              pricePerStudent: billingData.quoted_price || 0
+            }]);
+          }
         } else {
           setBillingInfo(null);
           setPayments([]);
