@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Simplified types to avoid deep type instantiation
 interface School {
   id: string;
   name: string;
@@ -10,8 +11,8 @@ interface School {
   contact_person: string | null;
   email: string | null;
   phone: string | null;
-  created_at: string | null;
   student_count: number | null;
+  created_at: string | null;
 }
 
 interface BillingInfo {
@@ -34,7 +35,7 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Simplified type for payment logs from the database
+// Simple type for payment logs from the database
 interface PaymentLogRecord {
   id: string;
   amount: number;
@@ -49,8 +50,7 @@ interface PaymentLogRecord {
   installment_id?: string | null;
   school_id?: string | null;
   billing_id?: string | null;
-  // Additional fields that may be returned by the database
-  [key: string]: any;
+  [key: string]: any; // Allow additional fields with index signature
 }
 
 interface UseSchoolDataReturn {
@@ -99,6 +99,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           throw new Error('School not found');
         }
         
+        // Use type assertion to avoid deep nesting
         setSchool(schoolData as School);
         
         // Fetch billing info
@@ -113,28 +114,25 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
         }
         
         if (billingData) {
-          setBillingInfo(billingData as BillingInfo);
+          // Type assertion
+          const typedBillingData = billingData as BillingInfo;
+          setBillingInfo(typedBillingData);
           
-          if (billingData.advance_paid_date) {
-            const advancePaidDate = new Date(billingData.advance_paid_date);
+          if (typedBillingData.advance_paid_date) {
+            const advancePaidDate = new Date(typedBillingData.advance_paid_date);
             
-            const totalAnnualFees = (schoolData.student_count || 0) * billingData.quoted_price;
-            console.log('Validity calculation - Total annual fees:', totalAnnualFees);
+            const totalAnnualFees = (schoolData.student_count || 0) * typedBillingData.quoted_price;
             
             const pricePerDay = totalAnnualFees / 365;
-            console.log('Validity calculation - Price per day:', pricePerDay);
             
-            const daysOfValidity = pricePerDay > 0 ? Math.floor((billingData.advance_paid || 0) / pricePerDay) : 0;
-            console.log('Validity calculation - Days of validity:', daysOfValidity);
+            const daysOfValidity = pricePerDay > 0 ? Math.floor((typedBillingData.advance_paid || 0) / pricePerDay) : 0;
             
             const validUntilDate = new Date(advancePaidDate);
             validUntilDate.setDate(validUntilDate.getDate() + daysOfValidity);
-            console.log('Validity calculation - Valid until:', validUntilDate.toISOString());
             
             const today = new Date();
             const timeDiff = validUntilDate.getTime() - today.getTime();
             const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
-            console.log('Validity calculation - Days remaining:', days);
             
             setDaysRemaining(days);
             setValidUntil(validUntilDate.toISOString());
@@ -148,73 +146,70 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          // Simplified payment logs fetching with proper typing
-          const fetchPaymentLogs = async () => {
-            try {
-              // Get all payment logs
-              const { data } = await supabase
-                .from('payment_logs')
-                .select('*');
-                
-              if (!data || data.length === 0) {
-                // Fallback if no payment logs found
-                setPayments([{
-                  id: '1',
-                  amount: billingData.advance_paid || 0,
-                  date: billingData.advance_paid_date || new Date().toISOString(),
-                  description: "Initial advance payment",
-                  studentCount: schoolData.student_count || 0,
-                  pricePerStudent: billingData.quoted_price || 0
-                }]);
-                return;
-              }
+          // Simplified payment logs fetching
+          try {
+            // Get all payment logs
+            const { data } = await supabase
+              .from('payment_logs')
+              .select('*');
               
-              // Cast to array of PaymentLogRecord with looser typing using any
-              const allLogs = data as any[];
-              
-              // Filter logs for this school using safe property access
-              const schoolLogs = allLogs.filter(log => 
-                log && log.school_id === id
-              );
-              
-              if (schoolLogs.length > 0) {
-                const mappedPayments = schoolLogs.map(log => ({
-                  id: log.id,
-                  amount: log.amount, 
-                  date: log.payment_date,
-                  description: log.description || "Payment",
-                  studentCount: log.student_count || schoolData.student_count || 0,
-                  pricePerStudent: log.price_per_student || billingData.quoted_price || 0,
-                  specialCase: log.is_special_case || false
-                }));
-                
-                setPayments(mappedPayments);
-              } else {
-                // Fallback if no payment logs found for this school
-                setPayments([{
-                  id: '1',
-                  amount: billingData.advance_paid || 0,
-                  date: billingData.advance_paid_date || new Date().toISOString(),
-                  description: "Initial advance payment",
-                  studentCount: schoolData.student_count || 0,
-                  pricePerStudent: billingData.quoted_price || 0
-                }]);
-              }
-            } catch (err) {
-              console.error("Error fetching payment logs:", err);
-              // Fallback to initial payment
+            if (!data || data.length === 0) {
+              // Fallback if no payment logs found
               setPayments([{
                 id: '1',
-                amount: billingData.advance_paid || 0,
-                date: billingData.advance_paid_date || new Date().toISOString(),
+                amount: typedBillingData.advance_paid || 0,
+                date: typedBillingData.advance_paid_date || new Date().toISOString(),
                 description: "Initial advance payment",
                 studentCount: schoolData.student_count || 0,
-                pricePerStudent: billingData.quoted_price || 0
+                pricePerStudent: typedBillingData.quoted_price || 0
+              }]);
+              return;
+            }
+            
+            // Type assertion to avoid deep recursion
+            const allLogs = data as PaymentLogRecord[];
+            
+            // Filter logs for this school
+            const schoolLogs = allLogs.filter(log => 
+              log && log.school_id === id
+            );
+            
+            if (schoolLogs.length > 0) {
+              // Map to Payment type with direct property access
+              const mappedPayments = schoolLogs.map(log => ({
+                id: log.id,
+                amount: log.amount, 
+                date: log.payment_date,
+                description: log.description || "Payment",
+                studentCount: log.student_count || schoolData.student_count || 0,
+                pricePerStudent: log.price_per_student || typedBillingData.quoted_price || 0,
+                specialCase: log.is_special_case || false
+              }));
+              
+              setPayments(mappedPayments);
+            } else {
+              // Fallback
+              setPayments([{
+                id: '1',
+                amount: typedBillingData.advance_paid || 0,
+                date: typedBillingData.advance_paid_date || new Date().toISOString(),
+                description: "Initial advance payment",
+                studentCount: schoolData.student_count || 0,
+                pricePerStudent: typedBillingData.quoted_price || 0
               }]);
             }
-          };
-          
-          await fetchPaymentLogs();
+          } catch (err) {
+            console.error("Error fetching payment logs:", err);
+            // Fallback
+            setPayments([{
+              id: '1',
+              amount: typedBillingData.advance_paid || 0,
+              date: typedBillingData.advance_paid_date || new Date().toISOString(),
+              description: "Initial advance payment",
+              studentCount: schoolData.student_count || 0,
+              pricePerStudent: typedBillingData.quoted_price || 0
+            }]);
+          }
         } else {
           setBillingInfo(null);
           setPayments([]);

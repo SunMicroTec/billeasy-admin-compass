@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
@@ -30,8 +31,8 @@ import { NotFoundState } from "@/components/school-details/NotFoundState";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-// Define types that match exactly what the hooks expect
-interface School {
+// Simplified flat types to avoid deep instantiation
+interface SimpleSchool {
   id: string;
   name: string;
   address?: string | null;
@@ -42,17 +43,17 @@ interface School {
   created_at?: string | null;
 }
 
-interface BillingInfo {
+interface SimpleBillingInfo {
   id: string;
-  school_id: string;
   quoted_price: number;
   total_installments: number;
   advance_paid: number | null;
   advance_paid_date: string | null;
+  school_id: string;
   created_at: string | null;
 }
 
-interface Payment {
+interface SimplePayment {
   id: string;
   amount: number;
   date: string;
@@ -62,10 +63,10 @@ interface Payment {
   specialCase?: boolean;
 }
 
-// Simple interface for local state
+// Simple interface for local state to avoid recursive type definitions
 interface LocalState {
-  payments: Payment[];
-  billingInfo: BillingInfo | null;
+  payments: SimplePayment[];
+  billingInfo: SimpleBillingInfo | null;
   daysRemaining: number;
   paymentStatus: string;
   validUntil: string | null;
@@ -80,13 +81,13 @@ const SchoolDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Get school data with consistent types
+  // Get school data
   const schoolDataResult = useSchoolData(id);
   
-  // Explicitly cast types to avoid deep instantiation
-  const school = schoolDataResult.school as School;
-  const billingInfo = schoolDataResult.billingInfo as BillingInfo;
-  const payments = schoolDataResult.payments as Payment[];
+  // Use type assertions to break deep instantiation cycles
+  const school = schoolDataResult.school as SimpleSchool;
+  const billingInfo = schoolDataResult.billingInfo as SimpleBillingInfo;
+  const payments = schoolDataResult.payments as SimplePayment[];
   const loading = schoolDataResult.loading;
   const error = schoolDataResult.error;
   const daysRemaining = schoolDataResult.daysRemaining;
@@ -99,7 +100,11 @@ const SchoolDetails: React.FC = () => {
     specialCase,
     setSpecialCase,
     processPayment
-  } = usePaymentProcessing(school, billingInfo, payments);
+  } = usePaymentProcessing(
+    school as any,
+    billingInfo as any,
+    payments as any
+  );
   
   // Local state with explicit typing to prevent deep instantiation
   const [localState, setLocalState] = useState<LocalState>({
@@ -112,7 +117,7 @@ const SchoolDetails: React.FC = () => {
   
   // Update local state when props change
   useEffect(() => {
-    // Cast to the expected LocalState shape to avoid type recursion
+    // Use a literal object assignment to avoid type recursion
     setLocalState({
       payments: payments || [],
       billingInfo: billingInfo || null,
@@ -133,21 +138,21 @@ const SchoolDetails: React.FC = () => {
   const handleSubmitPayment = async (data: PaymentFormValues) => {
     if (!school) return;
     
-    // Cast the result to a more basic type to avoid deep instantiation
+    // Process payment and handle result
     const result = await processPayment(data);
     
     if (result) {
-      // Force type cast to avoid recursion
+      // Directly use object literals to avoid deep type instantiation
       setLocalState({
-        billingInfo: result.billingInfo,
-        payments: result.payments,
+        billingInfo: result.billingInfo as SimpleBillingInfo,
+        payments: result.payments as SimplePayment[],
         daysRemaining: result.daysRemaining || 0,
         paymentStatus: result.paymentStatus || 'critical',
         validUntil: result.validUntil
       });
       setIsPaymentDialogOpen(false);
       
-      // Show success message with option to navigate back to dashboard
+      // Show success message
       toast({
         title: "Payment Processed",
         description: "Payment has been successfully recorded. The dashboard will reflect the updated validity.",
@@ -180,7 +185,6 @@ const SchoolDetails: React.FC = () => {
         });
       } catch (error) {
         console.error('Failed to log delete action:', error);
-        // Continue with deletion even if logging fails
       }
         
       // Delete related records first
@@ -256,8 +260,8 @@ const SchoolDetails: React.FC = () => {
         
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{school.name}</h1>
-            <p className="text-muted-foreground">{school.address}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{school?.name}</h1>
+            <p className="text-muted-foreground">{school?.address}</p>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3">
@@ -272,12 +276,12 @@ const SchoolDetails: React.FC = () => {
             </Button>
             
             <PaymentDialog 
-              schoolName={school.name}
+              schoolName={school?.name || ""}
               isOpen={isPaymentDialogOpen}
               isSubmitting={isSubmittingPayment}
               specialCase={specialCase}
               defaultValues={{
-                studentCount: school.student_count || 0,
+                studentCount: school?.student_count || 0,
                 pricePerStudent: localState.billingInfo?.quoted_price || 0
               }}
               onOpenChange={setIsPaymentDialogOpen}
@@ -303,9 +307,9 @@ const SchoolDetails: React.FC = () => {
 
           <div className="grid gap-4 md:grid-cols-2">
             <SchoolInfo 
-              studentCount={school.student_count || 0}
-              email={school.email}
-              phone={school.phone}
+              studentCount={school?.student_count || 0}
+              email={school?.email}
+              phone={school?.phone}
             />
 
             <BillingInfoCard 
@@ -320,7 +324,7 @@ const SchoolDetails: React.FC = () => {
         
         <TabsContent value="payments">
           <PaymentHistoryTable 
-            schoolName={school.name}
+            schoolName={school?.name || ""}
             payments={localState.payments}
             totalPaid={totalPaid}
             onAddPayment={handleOpenPaymentDialog}
@@ -333,7 +337,7 @@ const SchoolDetails: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {school.name} and all associated payment records.
+              This will permanently delete {school?.name} and all associated payment records.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
