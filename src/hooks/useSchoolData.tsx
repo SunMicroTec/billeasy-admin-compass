@@ -37,16 +37,18 @@ interface Payment {
 // Define the structure for payment logs data based on actual DB schema
 interface PaymentLogRecord {
   id: string;
-  school_id: string;
-  billing_id?: string | null;
   amount: number;
   payment_date: string;
-  description?: string | null;
   payment_mode?: string | null;
+  receipt_url?: string | null;
   created_at?: string | null;
+  description?: string | null;
   student_count?: number | null;
   price_per_student?: number | null;
   is_special_case?: boolean | null;
+  installment_id?: string | null;
+  school_id?: string | null;
+  billing_id?: string | null;
 }
 
 interface UseSchoolDataReturn {
@@ -144,21 +146,13 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
           }
           
-          // Explicitly type the response to avoid TypeScript errors
-          interface PaymentLogResponse {
-            data: PaymentLogRecord[] | null;
-            error: any;
-          }
-
-          // Explicitly list all columns we need in the select statement
-          const paymentLogsResponse: PaymentLogResponse = await supabase
+          // Fetch payment logs
+          // First check the actual columns in the table
+          const { data: paymentLogsData, error: paymentLogsError } = await supabase
             .from('payment_logs')
-            .select('id, school_id, amount, payment_date, payment_mode, created_at, description, student_count, price_per_student, is_special_case')
+            .select('id, amount, payment_date, payment_mode, receipt_url, created_at, description, student_count, price_per_student, is_special_case, school_id, billing_id')
             .eq('school_id', id)
             .order('payment_date', { ascending: false });
-            
-          const paymentLogsData = paymentLogsResponse.data;
-          const paymentLogsError = paymentLogsResponse.error;
             
           if (paymentLogsError) {
             console.error("Error fetching payment logs:", paymentLogsError);
