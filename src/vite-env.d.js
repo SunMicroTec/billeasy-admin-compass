@@ -1,2 +1,3 @@
 
-// This file is empty intentionally, or could include JavaScript-specific types
+// This file is empty intentionally since we're using JavaScript
+// It previously contained TypeScript-specific references which are no longer needed
