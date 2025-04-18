@@ -2,7 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize the Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || 'your-anon-key';
+const SUPABASE_URL = "https://shybyigqvcbzgwmkwsrt.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoeWJ5aWdxdmNiemd3bWt3c3J0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1NjIwMzIsImV4cCI6MjA2MDEzODAzMn0.ZWiSDpixi0J8mPNPzZNjPeF9ZsVgwA-QzTRl14CDQyM";
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Import the supabase client like this:
+// import { supabase } from "@/integrations/supabase/client";
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
