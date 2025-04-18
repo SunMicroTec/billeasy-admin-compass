@@ -1,80 +1,19 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-// Define simpler types without recursive references
-export interface School {
-  id: string;
-  name: string;
-  address: string | null;
-  contact_person: string | null;
-  email: string | null;
-  phone: string | null;
-  student_count: number | null;
-  created_at: string | null;
-}
-
-export interface BillingInfo {
-  id: string;
-  school_id: string;
-  quoted_price: number;
-  total_installments: number;
-  advance_paid: number | null;
-  advance_paid_date: string | null;
-  created_at: string | null;
-}
-
-export interface Payment {
-  id: string;
-  amount: number;
-  date: string;
-  description: string;
-  studentCount: number;
-  pricePerStudent: number;
-  specialCase?: boolean;
-}
-
-// Export return type to enforce consistent shape
-export interface UseSchoolDataReturn {
-  school: School | null;
-  billingInfo: BillingInfo | null;
-  payments: Payment[];
-  loading: boolean;
-  error: string | null;
-  daysRemaining: number;
-  paymentStatus: string;
-  validUntil: string | null;
-}
-
-// Simple type for payment logs from the database
-interface PaymentLogRecord {
-  id: string;
-  amount: number;
-  payment_date: string;
-  payment_mode?: string | null;
-  receipt_url?: string | null;
-  created_at?: string | null;
-  description?: string | null;
-  student_count?: number | null;
-  price_per_student?: number | null;
-  is_special_case?: boolean | null;
-  installment_id?: string | null;
-  school_id?: string | null;
-  billing_id?: string | null;
-}
-
-export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
+// Simplified types as plain objects
+export const useSchoolData = (id) => {
   const { toast } = useToast();
   
-  const [school, setSchool] = useState<School | null>(null);
-  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [school, setSchool] = useState(null);
+  const [billingInfo, setBillingInfo] = useState(null);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [daysRemaining, setDaysRemaining] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('critical');
-  const [validUntil, setValidUntil] = useState<string | null>(null);
+  const [validUntil, setValidUntil] = useState(null);
 
   useEffect(() => {
     const fetchSchoolData = async () => {
@@ -91,15 +30,10 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           .eq('id', id)
           .single();
         
-        if (schoolError) {
-          throw new Error(`Error fetching school: ${schoolError.message}`);
-        }
+        if (schoolError) throw schoolError;
+        if (!schoolData) throw new Error('School not found');
         
-        if (!schoolData) {
-          throw new Error('School not found');
-        }
-        
-        setSchool(schoolData as School);
+        setSchool(schoolData);
         
         // Fetch billing info
         const { data: billingData, error: billingError } = await supabase
@@ -113,7 +47,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
         }
         
         if (billingData) {
-          setBillingInfo(billingData as BillingInfo);
+          setBillingInfo(billingData);
           
           if (billingData.advance_paid_date) {
             const advancePaidDate = new Date(billingData.advance_paid_date);
@@ -165,7 +99,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
             }
             
             // Map to Payment type
-            const mappedPayments = data.map((log: PaymentLogRecord) => ({
+            const mappedPayments = data.map((log) => ({
               id: log.id,
               amount: log.amount, 
               date: log.payment_date,
@@ -193,7 +127,7 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
           setPayments([]);
         }
         
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching data:", err);
         setError(err.message);
         toast({
@@ -209,7 +143,6 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
     fetchSchoolData();
   }, [id, toast]);
 
-  // Explicitly cast the return object to UseSchoolDataReturn type
   return {
     school,
     billingInfo,
@@ -219,5 +152,5 @@ export const useSchoolData = (id: string | undefined): UseSchoolDataReturn => {
     daysRemaining,
     paymentStatus,
     validUntil
-  } as UseSchoolDataReturn;
+  };
 };
